@@ -3,8 +3,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-      # Build in the host network namespace so dependency downloads use the host resolver.
-      network: host
     image: fcast:latest
     container_name: fcast
     env_file:
