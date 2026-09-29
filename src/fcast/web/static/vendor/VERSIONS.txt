@@ -1,0 +1,4 @@
+Vendored frontend libraries (no build step):
+- pico.min.css      @picocss/pico 2.1.1 (MIT)
+- htmx.min.js       htmx.org 2.0.11 (0BSD)
+- chart.umd.min.js  chart.js 4.5.1 (MIT)
