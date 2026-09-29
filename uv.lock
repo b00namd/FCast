@@ -185,6 +185,7 @@ dependencies = [
     { name = "selectolax" },
     { name = "sqlalchemy" },
     { name = "typer" },
+    { name = "tzdata" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -208,6 +209,7 @@ requires-dist = [
     { name = "selectolax", specifier = ">=0.4.13" },
     { name = "sqlalchemy", specifier = ">=2.0" },
     { name = "typer", specifier = ">=0.27.2" },
+    { name = "tzdata", specifier = ">=2026.4" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54.0" },
 ]
 
