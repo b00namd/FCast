@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Watchlist{% endblock %}
+{% block content %}
+<h2>Watchlist</h2>
+{% include "partials/watch_form.html" %}
+
+<h3>Spieler</h3>
+<div class="overflow-auto">
+<table class="striped">
+  <thead>
+    <tr>
+      <th class="hide-sm">EA-ID</th>
+      <th>Spieler</th>
+      <th class="num">Kaufziel</th>
+      <th class="num">Verkaufsziel</th>
+      <th class="hide-sm">Quellen</th>
+      <th class="hide-sm">Notiz</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody id="watch-rows">
+    {% for entry, refs in rows %}{% include "partials/watch_row.html" %}{% endfor %}
+  </tbody>
+</table>
+</div>
+{% if not rows %}<p class="muted">Noch keine Spieler.</p>{% endif %}
+{% endblock %}

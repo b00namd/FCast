@@ -5,19 +5,28 @@ services:
       dockerfile: docker/Dockerfile
     image: fcast:latest
     container_name: fcast
-    # Runs the collector every FCAST_COLLECT_INTERVAL_MIN minutes.
-    # From Phase 3 on the same process also serves the web dashboard.
-    command: ["collect"]
+    # Web dashboard + scheduled collector in one process.
+    command: ["serve"]
     env_file:
       - path: .env
         required: false
     environment:
       FCAST_DB_PATH: /data/fcast.db
       FCAST_MANUAL_CSV: /import/prices.csv
+      FCAST_WEB_PORT: "8000"
+    ports:
+      # LAN only – do not forward this port on the router; use a VPN for remote access.
+      - "8000:8000"
     volumes:
       - fcast-data:/data
       # Drop a prices.csv here to feed the manual price source.
       - ./import:/import:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     restart: unless-stopped
     stop_grace_period: 30s
 

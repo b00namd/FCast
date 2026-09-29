@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     # Random delay (seconds) added to each scheduled run so requests don't hit fixed times.
     collect_jitter_s: int = Field(default=180, ge=0, le=1800)
 
+    # Web dashboard (Basic Auth). The dashboard refuses to start without a password.
+    web_user: str = "fcast"
+    web_password: SecretStr | None = None
+    web_host: str = "0.0.0.0"  # noqa: S104  (container port, published on the LAN only)
+    web_port: int = Field(default=8000, ge=1, le=65535)
+
     # Outgoing HTTP (only used by web sources whose terms allow automated access).
     http_contact: str | None = None
     http_min_interval_s: float = Field(default=3.0, ge=3.0)

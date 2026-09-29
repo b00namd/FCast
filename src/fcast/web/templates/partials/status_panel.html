@@ -1,0 +1,71 @@
+<section id="status-panel"
+  {% if running %}hx-get="/status/panel" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <article>
+    <header><strong>Collector</strong></header>
+    {% if running %}
+      <p><span aria-busy="true">Sammellauf läuft …</span></p>
+    {% endif %}
+    {% if result %}
+      <p>
+        Letzter Lauf: {{ result.started_at | dt("%d.%m. %H:%M:%S") }}
+        {% if result.finished_at %}({{ ((result.finished_at - result.started_at).total_seconds()) | round(1) }} s){% endif %}<br>
+        {{ result.players }} Spieler · {{ result.stored }} neue Preise · {{ result.unchanged }} unverändert ·
+        {{ result.missing | length }} ohne Preis
+        {% if result.error_count %}· <span class="down">{{ result.error_count }} Fehler</span>{% endif %}
+      </p>
+      {% for source, reason in result.paused.items() %}
+        <p class="down">{{ source }} hat Anfragen abgelehnt und wurde pausiert: {{ reason }}</p>
+      {% endfor %}
+      {% if result.errors %}
+        <details>
+          <summary>Fehler im letzten Lauf</summary>
+          {% for source, messages in result.errors.items() %}
+            <p><strong>{{ source }}</strong></p>
+            <ul>{% for m in messages[:10] %}<li><small>{{ m }}</small></li>{% endfor %}</ul>
+          {% endfor %}
+        </details>
+      {% endif %}
+    {% elif not running %}
+      <p class="muted">Seit dem Start noch kein Sammellauf.</p>
+    {% endif %}
+    <p class="muted">
+      Intervall {{ settings.collect_interval_min }} min{% if next_run %} · nächster Lauf {{ next_run | dt("%H:%M") }}{% endif %}
+      · Strategie {{ settings.source_strategy }}
+    </p>
+    <footer>
+      <button hx-post="/status/collect" hx-target="#status-panel" hx-swap="outerHTML"
+              {% if running %}disabled{% endif %}>Jetzt sammeln</button>
+    </footer>
+  </article>
+
+  <h3>Quellen</h3>
+  <div class="overflow-auto">
+  <table class="striped">
+    <thead>
+      <tr><th>Quelle</th><th>Status</th><th class="hide-sm">Letzter Erfolg</th><th class="hide-sm">Letzter Fehler</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for s in sources %}
+      <tr>
+        <td>{{ s.name }}</td>
+        <td>
+          {% if s.paused %}<span class="badge bad">pausiert bis {{ s.status.paused_until | dt }}</span>
+          {% elif s.enabled %}<span class="badge good">aktiv</span>{% endif %}
+          {% if not s.enabled %}<span class="badge">deaktiviert</span>{% endif %}
+          {% if s.paused %}<br><small class="muted">{{ s.status.pause_reason }}</small>{% endif %}
+        </td>
+        <td class="hide-sm">{{ s.status.last_success_at | dt if s.status else "–" }}</td>
+        <td class="hide-sm"><small>{% if s.status and s.status.last_error %}{{ s.status.last_error_at | dt }}: {{ s.status.last_error[:80] }}{% else %}–{% endif %}</small></td>
+        <td class="actions">
+          {% if s.paused %}
+            <button class="secondary outline" hx-post="/status/sources/{{ s.name }}/resume"
+                    hx-target="#status-panel" hx-swap="outerHTML"
+                    hx-confirm="Pause von {{ s.name }} wirklich aufheben? Nur sinnvoll, wenn die Sperre vorbei ist.">Fortsetzen</button>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>

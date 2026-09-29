@@ -93,6 +93,13 @@ def set_source_ref(session: Session, player: Player, source: str, external_ref: 
     return ref
 
 
+def remove_source_ref(session: Session, player: Player, source: str) -> None:
+    ref = session.get(SourceRef, (player.id, source))
+    if ref is not None:
+        session.delete(ref)
+        session.flush()
+
+
 def get_source_ref(session: Session, ea_id: int, source: str) -> str | None:
     return session.scalar(
         select(SourceRef.external_ref)
@@ -152,6 +159,22 @@ def latest_snapshot(session: Session, player: Player, platform: Platform) -> Pri
     return session.scalar(
         select(PriceSnapshot)
         .where(PriceSnapshot.player_id == player.id, PriceSnapshot.platform == platform)
+        .order_by(PriceSnapshot.captured_at.desc(), PriceSnapshot.id.desc())
+        .limit(1)
+    )
+
+
+def snapshot_before(
+    session: Session, player: Player, platform: Platform, at: datetime
+) -> PriceSnapshot | None:
+    """Newest snapshot captured at or before `at` (e.g. the price 24 hours ago)."""
+    return session.scalar(
+        select(PriceSnapshot)
+        .where(
+            PriceSnapshot.player_id == player.id,
+            PriceSnapshot.platform == platform,
+            PriceSnapshot.captured_at <= at,
+        )
         .order_by(PriceSnapshot.captured_at.desc(), PriceSnapshot.id.desc())
         .limit(1)
     )

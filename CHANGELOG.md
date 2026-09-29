@@ -4,6 +4,20 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Phase 3 – Basis-Weboberfläche
+- `fcast serve`: FastAPI-Dashboard und Collector/Scheduler in einem Prozess (Scheduler im Lifespan).
+  Docker startet jetzt `serve`, Port 8000, Docker-Healthcheck über `/health`.
+- Basic Auth (`FCAST_WEB_USER`, `FCAST_WEB_PASSWORD`); ohne Passwort startet das Dashboard nicht.
+  Same-Origin-Prüfung für alle Formular-Aktionen (Schutz gegen Cross-Site-Requests).
+- Jinja2 + HTMX + Pico.css, Chart.js; Bibliotheken liegen versioniert unter `web/static/vendor`
+  (keine Build-Pipeline, kein CDN). Deutsche Oberfläche, Dark Mode, mobil nutzbar.
+- Seiten: **Übersicht** (letzter Preis, Quelle, Änderung zu 24 h, Markierung bei erreichtem
+  Kauf-/Verkaufsziel), **Watchlist** (hinzufügen inkl. FUTBIN-Link, inline bearbeiten,
+  (de)aktivieren), **Spielerdetail** (Kennzahlen und Chart der letzten 7 Tage je Quelle,
+  Schnell-Eingabe „Preis erfassen“, letzte Preise), **Status** (letzter Lauf, Fehler,
+  Quellen mit Pause und „Fortsetzen“, Button „Jetzt sammeln“).
+- Betragseingaben verstehen „1.200.000“, „1,2M“, „45k“.
+
 ### Phase 2 – Preisquellen & Collector
 - **Nachtrag 2:** FUTNext als Ersatzquelle (PC-Preise über Einstellungs-Cookie, Plattform-Label
   wird geprüft). Automatischer Rückzug: HTTP 403/429/Bot-Challenge → Quelle wird ohne weitere

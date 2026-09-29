@@ -1,0 +1,57 @@
+/* Small additions on top of Pico.css */
+:root {
+  --fc-up: #2ecc71;
+  --fc-down: #e74c3c;
+  --fc-hit: #f1c40f;
+}
+
+.muted { color: var(--pico-muted-color); }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.up { color: var(--fc-up); }
+.down { color: var(--fc-down); }
+.hit { color: var(--fc-hit); font-weight: 600; }
+.nowrap { white-space: nowrap; }
+
+table td, table th { vertical-align: middle; }
+table .actions { white-space: nowrap; text-align: right; }
+table .actions button, table .actions [role="button"] {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+  margin: 0 0 0 0.25rem;
+  width: auto;
+}
+table input { margin: 0; padding: 0.3rem 0.5rem; min-width: 6rem; }
+tr.inactive { opacity: 0.55; }
+
+.badge {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 0.6rem;
+  font-size: 0.75rem;
+  background: var(--pico-secondary-background);
+  color: var(--pico-secondary-inverse);
+}
+.badge.warn { background: var(--fc-hit); color: #222; }
+.badge.bad { background: var(--fc-down); color: #fff; }
+.badge.good { background: var(--fc-up); color: #111; }
+
+.message { padding: 0.6rem 0.9rem; border-radius: var(--pico-border-radius); margin-bottom: 1rem; }
+.message.ok { background: color-mix(in srgb, var(--fc-up) 20%, transparent); }
+.message.error { background: color-mix(in srgb, var(--fc-down) 25%, transparent); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+.stats article { margin: 0; padding: 0.75rem 1rem; }
+.stats .label { font-size: 0.8rem; color: var(--pico-muted-color); }
+.stats .value { font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.chart-box { position: relative; height: 320px; margin-bottom: 1.5rem; }
+
+@media (max-width: 640px) {
+  .hide-sm { display: none; }
+  header nav { flex-direction: column; align-items: flex-start; }
+  header nav ul:last-child { margin-left: calc(var(--pico-nav-element-spacing-horizontal) * -1); }
+  table { font-size: 0.9rem; }
+  td .badge { display: block; width: fit-content; margin-top: 0.15rem; }
+  .stats .value { font-size: 1.05rem; }
+  .chart-box { height: 240px; }
+}

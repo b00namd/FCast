@@ -1,0 +1,18 @@
+<tr id="watch-{{ entry.player.ea_id }}">
+  <td class="hide-sm">{{ entry.player.ea_id }}</td>
+  <td>
+    <input name="name" aria-label="Name" value="{{ entry.player.name or '' }}" placeholder="Name">
+    {% for error in errors %}<small class="down">{{ error }}</small>{% endfor %}
+  </td>
+  <td><input name="buy" aria-label="Ziel-Kaufpreis" inputmode="decimal" value="{{ entry.target_buy or '' }}"></td>
+  <td><input name="sell" aria-label="Ziel-Verkaufspreis" inputmode="decimal" value="{{ entry.target_sell or '' }}"></td>
+  <td class="hide-sm"><input name="futbin_url" aria-label="FUTBIN-Link" type="url" placeholder="FUTBIN-Link"
+             value="{% if refs.futbin %}https://www.futbin.com{{ refs.futbin }}{% endif %}"></td>
+  <td class="hide-sm"><input name="note" aria-label="Notiz" maxlength="500" value="{{ entry.note or '' }}"></td>
+  <td class="actions">
+    <button hx-post="/watchlist/{{ entry.player.ea_id }}" hx-include="closest tr"
+            hx-target="closest tr" hx-swap="outerHTML">Speichern</button>
+    <button class="secondary outline" hx-get="/watchlist/{{ entry.player.ea_id }}/row"
+            hx-target="closest tr" hx-swap="outerHTML">Abbrechen</button>
+  </td>
+</tr>

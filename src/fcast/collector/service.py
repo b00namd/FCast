@@ -36,6 +36,10 @@ class Collector:
         self._runs = 0
         self._lock = asyncio.Lock()
 
+    @property
+    def running(self) -> bool:
+        return self._lock.locked()
+
     async def run_once(self) -> CollectResult:
         async with self._lock:  # never run two collections at the same time
             if not self.sources:

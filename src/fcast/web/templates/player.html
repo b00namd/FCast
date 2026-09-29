@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ d.player.display_name }}{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>{{ d.player.display_name }}</h2>
+  <p class="muted">
+    EA-ID {{ d.player.ea_id }}
+    {% if d.player.position %} · {{ d.player.position }}{% endif %}
+    {% if d.player.card_type %} · {{ d.player.card_type }}{% endif %}
+    {% if d.player.club %} · {{ d.player.club }}{% endif %}
+    {% if d.player.league %} · {{ d.player.league }}{% endif %}
+    {% if d.player.nation %} · {{ d.player.nation }}{% endif %}
+    {% if d.refs.futbin %} · <a href="https://www.futbin.com{{ d.refs.futbin }}" target="_blank" rel="noreferrer">FUTBIN</a>{% endif %}
+    · <a href="https://www.futnext.com/players/p/{{ d.player.ea_id }}" target="_blank" rel="noreferrer">FUTNext</a>
+  </p>
+</hgroup>
+
+<div class="stats">
+  <article><div class="label">Aktuell</div><div class="value">{{ d.latest.price | coins if d.latest else "–" }}</div>
+    <small class="muted">{{ d.latest.captured_at | dt if d.latest else "" }}</small></article>
+  <article><div class="label">Ø 7 Tage</div><div class="value">{{ d.stats.average | coins if d.stats else "–" }}</div></article>
+  <article><div class="label">Min 7 Tage</div><div class="value">{{ d.stats.low | coins if d.stats else "–" }}</div></article>
+  <article><div class="label">Max 7 Tage</div><div class="value">{{ d.stats.high | coins if d.stats else "–" }}</div></article>
+  <article><div class="label">Kaufziel / Verkaufsziel</div>
+    <div class="value">{{ d.entry.target_buy | coins if d.entry else "–" }} / {{ d.entry.target_sell | coins if d.entry else "–" }}</div></article>
+</div>
+
+<h3>Preisverlauf (7 Tage, {{ platform_label }})</h3>
+{% if d.chart %}
+  <div class="chart-box"><canvas id="price-chart" aria-label="Preisverlauf"></canvas></div>
+  <script type="application/json" id="chart-data">{{ d.chart | tojson }}</script>
+{% else %}
+  <p class="muted">Noch keine Preise in den letzten 7 Tagen.</p>
+{% endif %}
+
+<h3>Preis erfassen</h3>
+{% if error == "price" %}<div class="message error" role="alert">Ungültiger Betrag.</div>{% endif %}
+<form method="post" action="/players/{{ d.player.ea_id }}/prices">
+  <fieldset role="group">
+    <input name="price" inputmode="decimal" required placeholder="z. B. 1.250.000 oder 1,25M" aria-label="Preis">
+    <button type="submit">Speichern</button>
+  </fieldset>
+  <small class="muted">Wird als Quelle „manual“ mit aktuellem Zeitpunkt gespeichert ({{ platform_label }}).</small>
+</form>
+
+<h3>Letzte Preise</h3>
+{% if d.recent %}
+<div class="overflow-auto">
+<table class="striped">
+  <thead><tr><th>Zeitpunkt</th><th class="num">Preis</th><th>Quelle</th></tr></thead>
+  <tbody>
+  {% for s in d.recent %}
+    <tr><td>{{ s.captured_at | dt }}</td><td class="num">{{ s.price | coins }}</td><td>{{ s.source }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p class="muted">Keine Daten.</p>{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if d.chart %}
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/player-chart.js"></script>
+{% endif %}
+{% endblock %}

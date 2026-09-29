@@ -33,4 +33,5 @@ WORKDIR /app
 VOLUME ["/data"]
 
 ENTRYPOINT ["fcast"]
-CMD ["--version"]
+EXPOSE 8000
+CMD ["serve"]

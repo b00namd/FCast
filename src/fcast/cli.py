@@ -292,3 +292,29 @@ def sources_resume(name: Annotated[str, typer.Argument(help="Source name, e.g. f
     with _db_session() as session:
         repo.resume_source(session, name.lower())
     typer.echo(f"{name} resumed.")
+
+
+@app.command()
+def serve(
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Debug logging.")] = False,
+) -> None:
+    """Run the web dashboard together with the scheduled collector."""
+    import uvicorn
+
+    from fcast.web.app import create_app
+
+    _setup_logging(verbose)
+    settings = get_settings()
+    try:
+        web_app = create_app(settings)
+    except RuntimeError as exc:
+        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
+    uvicorn.run(
+        web_app,
+        host=settings.web_host,
+        port=settings.web_port,
+        log_config=None,  # keep our logging setup
+        access_log=verbose,
+        proxy_headers=False,
+    )

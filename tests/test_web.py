@@ -1,0 +1,371 @@
+"""Dashboard route tests with FastAPI's TestClient (no scheduler, fake price source)."""
+
+import time
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import select
+
+from fcast.collector.service import Collector
+from fcast.config import Platform, Settings
+from fcast.db import repositories as repo
+from fcast.db.models import PriceSnapshot
+from fcast.sources.base import PlayerInfo, PlayerNotFoundError, PriceQuote, PriceSource
+from fcast.web.app import create_app, format_coins, format_pct
+from fcast.web.forms import NBSP, parse_coins
+
+AUTH = ("fcast", "s3cret")
+HTMX = {"HX-Request": "true"}
+
+
+class StaticSource(PriceSource):
+    name = "fake"
+    remote = True
+
+    def __init__(self, prices: dict[int, int]) -> None:
+        self.prices = prices
+
+    async def fetch_price(self, ea_id: int, platform: Platform) -> PriceQuote:
+        if ea_id not in self.prices:
+            raise PlayerNotFoundError(str(ea_id))
+        return PriceQuote(ea_id, platform, self.prices[ea_id], self.name, datetime.now(UTC))
+
+    async def fetch_player(self, ea_id: int) -> PlayerInfo:
+        return PlayerInfo(ea_id=ea_id, name=f"Player {ea_id}", rating=90)
+
+
+def make_settings(tmp_path: Path, **overrides: object) -> Settings:
+    values: dict[str, object] = {
+        "db_path": tmp_path / "fcast.db",
+        "sources": "",
+        "platform": "pc",
+        "web_user": AUTH[0],
+        "web_password": AUTH[1],
+    }
+    values.update(overrides)
+    return Settings(_env_file=None, **values)  # type: ignore[arg-type]
+
+
+@pytest.fixture
+def collector(tmp_path: Path) -> Collector:
+    return Collector(make_settings(tmp_path), sources=[StaticSource({1: 1_000, 2: 2_000})])
+
+
+@pytest.fixture
+def client(tmp_path: Path, collector: Collector) -> Iterator[TestClient]:
+    app = create_app(make_settings(tmp_path), collector=collector, run_scheduler=False)
+    with TestClient(app) as test_client:
+        test_client.auth = AUTH
+        yield test_client
+
+
+def add_watch(collector: Collector, ea_id: int, **kwargs: int | None) -> None:
+    with collector.session_factory.begin() as session:
+        player = repo.upsert_player(session, ea_id, repo.PlayerDetails(name=f"P{ea_id}"))
+        repo.set_watch(session, player, **kwargs)  # type: ignore[arg-type]
+
+
+def add_price(
+    collector: Collector, ea_id: int, price: int, at: datetime, source: str = "x"
+) -> None:
+    with collector.session_factory.begin() as session:
+        player = repo.upsert_player(session, ea_id)
+        repo.add_snapshot(session, player, Platform.PC, price, source, at)
+
+
+# --- auth, health, security ------------------------------------------------
+
+
+def test_health_is_public(client: TestClient) -> None:
+    response = client.get("/health", auth=None)
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+@pytest.mark.parametrize("auth", [None, ("fcast", "wrong"), ("other", "s3cret")])
+def test_pages_require_auth(client: TestClient, auth: tuple[str, str] | None) -> None:
+    response = client.get("/prices", auth=auth)
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"].startswith("Basic")
+
+
+def test_static_files_are_served(client: TestClient) -> None:
+    assert client.get("/static/vendor/htmx.min.js", auth=None).status_code == 200
+    assert client.get("/static/app.css", auth=None).status_code == 200
+
+
+def test_app_requires_password(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="FCAST_WEB_PASSWORD"):
+        create_app(make_settings(tmp_path, web_password=None), run_scheduler=False)
+
+
+def test_cross_site_post_is_rejected(client: TestClient) -> None:
+    response = client.post(
+        "/watchlist", data={"ea_id": "5"}, headers={"Origin": "https://evil.example"}
+    )
+    assert response.status_code == 403
+    response = client.post(
+        "/watchlist",
+        data={"ea_id": "5"},
+        headers={"Origin": "http://testserver"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+
+def test_index_redirects_to_prices(client: TestClient) -> None:
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/prices"
+
+
+# --- watchlist -------------------------------------------------------------
+
+
+def test_watchlist_add_without_htmx(client: TestClient, collector: Collector) -> None:
+    response = client.post(
+        "/watchlist",
+        data={
+            "ea_id": "190042",
+            "name": "Maradona",
+            "buy": "5.500.000",
+            "sell": "7,2M",
+            "futbin_url": "https://www.futbin.com/27/player/21487/maradona",
+            "note": "Icon",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    page = client.get("/watchlist").text
+    assert "Maradona" in page
+    assert "5.500.000" in page
+    assert "7.200.000" in page
+    assert "futbin.com/27/player/21487/maradona" in page
+    with collector.session_factory() as session:
+        assert repo.get_source_ref(session, 190042, "futbin") == "/27/player/21487/maradona"
+
+
+def test_watchlist_add_with_htmx_returns_form_and_rows(client: TestClient) -> None:
+    response = client.post("/watchlist", data={"ea_id": "231747", "buy": "4m"}, headers=HTMX)
+    assert response.status_code == 200
+    assert 'id="watch-form"' in response.text
+    assert "gespeichert" in response.text
+    assert 'hx-swap-oob="true"' in response.text
+    assert "4.000.000" in response.text
+
+
+@pytest.mark.parametrize(
+    ("data", "error"),
+    [
+        ({"ea_id": "abc"}, "EA-ID"),
+        ({"ea_id": "1", "buy": "viel"}, "Ziel-Kaufpreis"),
+        ({"ea_id": "1", "futbin_url": "https://www.fut.gg/players/1"}, "FUTBIN-Link"),
+    ],
+)
+def test_watchlist_add_validation(client: TestClient, data: dict[str, str], error: str) -> None:
+    response = client.post("/watchlist", data=data, headers=HTMX)
+    assert response.status_code == 200
+    assert error in response.text
+    assert "hx-swap-oob" not in response.text
+    assert client.post("/watchlist", data=data).status_code == 422
+
+
+def test_watchlist_tax_warning(client: TestClient) -> None:
+    response = client.post(
+        "/watchlist", data={"ea_id": "1", "buy": "10000", "sell": "10200"}, headers=HTMX
+    )
+    assert "5 % Steuer" in response.text
+
+
+def test_watchlist_edit_update_and_toggle(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 7, target_buy=1_000)
+    edit = client.get("/watchlist/7/edit")
+    assert edit.status_code == 200
+    assert 'name="buy"' in edit.text
+
+    updated = client.post(
+        "/watchlist/7",
+        data={"name": "Neu", "buy": "900", "sell": "1500", "futbin_url": "", "note": "x"},
+    )
+    assert updated.status_code == 200
+    assert "Neu" in updated.text
+    assert "1.500" in updated.text
+
+    bad = client.post("/watchlist/7", data={"buy": "nope"})
+    assert "ungültiger Betrag" in bad.text
+
+    toggled = client.post("/watchlist/7/toggle")
+    assert "inaktiv" in toggled.text
+    assert "Aktivieren" in toggled.text
+    # Editing an inactive entry keeps it inactive.
+    client.post("/watchlist/7", data={"buy": "800"})
+    with collector.session_factory() as session:
+        player = repo.get_player_by_ea_id(session, 7)
+        assert player is not None
+        entry = repo.get_watch(session, player)
+        assert entry is not None
+        assert entry.active is False
+        assert entry.target_buy == 800
+
+    assert client.get("/watchlist/7/row").status_code == 200
+    assert client.get("/watchlist/999/edit").status_code == 404
+
+
+def test_futbin_link_can_be_removed(client: TestClient, collector: Collector) -> None:
+    client.post(
+        "/watchlist",
+        data={"ea_id": "3", "futbin_url": "https://www.futbin.com/27/player/1/x"},
+    )
+    client.post("/watchlist/3", data={"futbin_url": ""})
+    with collector.session_factory() as session:
+        assert repo.get_source_ref(session, 3, "futbin") is None
+
+
+# --- prices and player detail ----------------------------------------------
+
+
+def test_prices_overview(client: TestClient, collector: Collector) -> None:
+    now = datetime.now(UTC)
+    add_watch(collector, 1, target_buy=1_100)
+    add_watch(collector, 2)
+    add_watch(collector, 3)
+    add_price(collector, 1, 1_250, now - timedelta(hours=25))
+    add_price(collector, 1, 1_000, now - timedelta(minutes=5))
+    add_price(collector, 2, 2_000, now - timedelta(minutes=5))
+    with collector.session_factory.begin() as session:
+        player = repo.get_player_by_ea_id(session, 3)
+        assert player is not None
+        repo.set_watch_active(session, player, False)
+
+    page = client.get("/prices").text
+    assert "P1" in page
+    assert "1.000" in page
+    assert "-20,0 %" in page  # 1.250 -> 1.000
+    assert "Kaufziel" in page  # 1.000 <= target 1.100
+    assert "P2" in page
+    assert "P3" not in page  # inactive
+
+
+def test_prices_overview_empty(client: TestClient) -> None:
+    assert "Noch keine aktiven Spieler" in client.get("/prices").text
+
+
+def test_player_page_with_chart(client: TestClient, collector: Collector) -> None:
+    now = datetime.now(UTC)
+    add_watch(collector, 1)
+    add_price(collector, 1, 1_000, now - timedelta(days=2), source="futbin")
+    add_price(collector, 1, 1_100, now - timedelta(hours=1), source="futnext")
+    add_price(collector, 1, 9_999, now - timedelta(days=9), source="futbin")  # outside window
+
+    page = client.get("/players/1").text
+    assert 'id="chart-data"' in page
+    assert '"futbin"' in page
+    assert '"futnext"' in page
+    assert "1.050" in page  # average of the 7-day window
+    assert "9.999" not in page
+
+
+def test_player_page_unknown(client: TestClient) -> None:
+    assert client.get("/players/424242").status_code == 404
+
+
+def test_manual_price_entry(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 1)
+    response = client.post("/players/1/prices", data={"price": "1,25M"}, follow_redirects=False)
+    assert response.status_code == 303
+    with collector.session_factory() as session:
+        snapshot = session.scalars(select(PriceSnapshot)).one()
+        assert (snapshot.price, snapshot.source, snapshot.platform) == (
+            1_250_000,
+            "manual",
+            Platform.PC,
+        )
+
+    bad = client.post("/players/1/prices", data={"price": "abc"}, follow_redirects=False)
+    assert bad.headers["location"] == "/players/1?error=price"
+    assert "Ungültiger Betrag" in client.get("/players/1?error=price").text
+
+
+# --- status ----------------------------------------------------------------
+
+
+def wait_for_run(client: TestClient, timeout: float = 5.0) -> dict[str, object]:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        health = client.get("/health", auth=None).json()
+        if health["last_run"] and not health["collector_running"]:
+            return health  # type: ignore[no-any-return]
+        time.sleep(0.05)
+    pytest.fail("collection did not finish")
+
+
+def test_status_page_and_manual_collect(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 1)
+    add_watch(collector, 2)
+    assert "Seit dem Start noch kein Sammellauf" in client.get("/status").text
+
+    response = client.post("/status/collect", headers=HTMX)
+    assert response.status_code == 200
+    assert 'id="status-panel"' in response.text
+    wait_for_run(client)
+
+    panel = client.get("/status/panel").text
+    assert "2 Spieler" in panel
+    assert "2 neue Preise" in panel
+
+
+def test_status_shows_and_resumes_paused_source(client: TestClient, collector: Collector) -> None:
+    with collector.session_factory.begin() as session:
+        repo.pause_source(session, "futbin", datetime.now(UTC) + timedelta(hours=3), "HTTP 429")
+    page = client.get("/status").text
+    assert "pausiert bis" in page
+    assert "HTTP 429" in page
+
+    response = client.post("/status/sources/futbin/resume", headers=HTMX)
+    assert response.status_code == 200
+    assert "pausiert bis" not in response.text
+
+
+def test_status_collect_without_htmx_redirects(client: TestClient) -> None:
+    response = client.post("/status/collect", follow_redirects=False)
+    assert response.status_code == 303
+    wait_for_run(client)
+
+
+# --- helpers ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "value"),
+    [
+        ("1.200.000", 1_200_000),
+        ("1,200,000", 1_200_000),
+        ("1 200 000", 1_200_000),
+        (f"1{NBSP}200{NBSP}000", 1_200_000),
+        ("1.2M", 1_200_000),
+        ("1,25m", 1_250_000),
+        ("45k", 45_000),
+        ("950", 950),
+        ("", None),
+        ("  ", None),
+        (None, None),
+    ],
+)
+def test_parse_coins(text: str | None, value: int | None) -> None:
+    assert parse_coins(text) == value
+
+
+@pytest.mark.parametrize("text", ["abc", "0", "-5", "1.2.3M", "12x"])
+def test_parse_coins_rejects(text: str) -> None:
+    with pytest.raises(ValueError, match="amount"):
+        parse_coins(text)
+
+
+def test_formatters() -> None:
+    assert format_coins(1_250_000) == "1.250.000"
+    assert format_coins(None) == chr(0x2013)
+    assert format_pct(-20.0) == "-20,0 %"
+    assert format_pct(3.25) == "+3,2 %"

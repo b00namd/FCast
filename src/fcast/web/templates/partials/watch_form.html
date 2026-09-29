@@ -1,0 +1,39 @@
+<form id="watch-form" method="post" action="/watchlist"
+      hx-post="/watchlist" hx-target="this" hx-swap="outerHTML">
+  {% if message %}<div class="message ok" role="status">{{ message }}</div>{% endif %}
+  {% if errors %}
+    <div class="message error" role="alert">
+      {% for error in errors %}<div>{{ error }}</div>{% endfor %}
+    </div>
+  {% endif %}
+  <div class="grid">
+    <label>EA-ID
+      <input name="ea_id" inputmode="numeric" required placeholder="z. B. 231747" value="{{ form.ea_id or '' }}">
+    </label>
+    <label>Name <small class="muted">(optional)</small>
+      <input name="name" placeholder="wird sonst automatisch ergänzt" value="{{ form.name or '' }}">
+    </label>
+  </div>
+  <div class="grid">
+    <label>Ziel-Kaufpreis
+      <input name="buy" inputmode="decimal" placeholder="z. B. 1.200.000 oder 1,2M" value="{{ form.buy or '' }}">
+    </label>
+    <label>Ziel-Verkaufspreis
+      <input name="sell" inputmode="decimal" placeholder="z. B. 1.400.000" value="{{ form.sell or '' }}">
+    </label>
+  </div>
+  <label>FUTBIN-Link <small class="muted">(optional, sonst nur FUTNext)</small>
+    <input name="futbin_url" type="url" placeholder="https://www.futbin.com/27/player/21487/maradona" value="{{ form.futbin_url or '' }}">
+  </label>
+  <label>Notiz
+    <input name="note" maxlength="500" value="{{ form.note or '' }}">
+  </label>
+  <button type="submit">Speichern</button>
+</form>
+{% if oob_rows %}
+<template>
+  <tbody id="watch-rows" hx-swap-oob="true">
+    {% for entry, refs in rows %}{% include "partials/watch_row.html" %}{% endfor %}
+  </tbody>
+</template>
+{% endif %}

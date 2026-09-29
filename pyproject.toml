@@ -14,6 +14,7 @@ dependencies = [
     "httpx>=0.28.1",
     "jinja2>=3.1.6",
     "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
     "rich>=15.0.0",
     "selectolax>=0.4.13",
     "sqlalchemy>=2.0",
@@ -61,3 +62,7 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-ra"
+filterwarnings = [
+    # Starlette 1.7 nudges towards httpx2 for its TestClient; httpx still works.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
