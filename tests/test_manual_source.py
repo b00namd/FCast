@@ -98,7 +98,14 @@ def test_invalid_csv(tmp_path: Path, lines: tuple[str, ...], message: str) -> No
         parse_csv(path, Platform.CONSOLE, BERLIN)
 
 
-async def test_missing_file_is_source_error(tmp_path: Path) -> None:
+async def test_missing_file_means_no_prices(tmp_path: Path) -> None:
     src = ManualSource(tmp_path / "nope.csv", Platform.CONSOLE, BERLIN)
-    with pytest.raises(SourceError):
+    with pytest.raises(PlayerNotFoundError, match="does not exist"):
         await src.fetch_price(1, Platform.CONSOLE)
+
+
+async def test_unreadable_path_is_source_error(tmp_path: Path) -> None:
+    src = ManualSource(tmp_path, Platform.CONSOLE, BERLIN)  # a directory, not a file
+    with pytest.raises(SourceError) as info:
+        await src.fetch_price(1, Platform.CONSOLE)
+    assert not isinstance(info.value, PlayerNotFoundError)

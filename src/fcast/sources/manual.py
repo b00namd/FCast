@@ -120,6 +120,9 @@ class ManualSource(PriceSource):
     async def _load(self) -> list[CsvRow]:
         try:
             stat = await asyncio.to_thread(self.path.stat)
+        except FileNotFoundError as exc:
+            # No file simply means no manual prices right now.
+            raise PlayerNotFoundError(f"{self.path} does not exist") from exc
         except OSError as exc:
             raise SourceError(f"cannot read {self.path}: {exc}") from exc
         key = (stat.st_mtime_ns, stat.st_size)
