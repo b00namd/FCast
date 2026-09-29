@@ -42,7 +42,7 @@ fcast/
     web/               # FastAPI-App, Templates
     cli.py             # Typer-CLI
   tests/
-  alembic/
+  src/fcast/db/migrations/  # Alembic migrations (inside the package, ships with the Docker image)
   docker/
   PLAN.md
   CLAUDE.md
