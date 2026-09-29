@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # Manual price source: CSV file that is read on every collector run.
     manual_csv: Path | None = None
 
+    # Comma-separated web sources to query, e.g. "futbin". Empty disables web access.
+    sources: str = "futbin"
+
     # Outgoing HTTP (only used by web sources whose terms allow automated access).
     http_contact: str | None = None
     http_min_interval_s: float = Field(default=3.0, ge=3.0)
@@ -51,6 +54,20 @@ class Settings(BaseSettings):
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError(f"unknown timezone: {value}") from exc
         return value
+
+    @field_validator("sources")
+    @classmethod
+    def _known_sources(cls, value: str) -> str:
+        known = {"futbin"}
+        names = [name.strip().lower() for name in value.split(",") if name.strip()]
+        unknown = set(names) - known
+        if unknown:
+            raise ValueError(f"unknown sources: {', '.join(sorted(unknown))}")
+        return ",".join(names)
+
+    @property
+    def web_sources(self) -> list[str]:
+        return [name for name in self.sources.split(",") if name]
 
     @property
     def tz(self) -> ZoneInfo:

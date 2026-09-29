@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from fcast.collector.job import collect_once
+from fcast.collector.job import collect_once, source_order
 from fcast.collector.service import JOB_ID, Collector, create_scheduler, run_forever
 from fcast.config import Platform, Settings
 from fcast.db import repositories as repo
@@ -33,8 +33,10 @@ class FakeSource(PriceSource):
         prices: dict[int, int] | None = None,
         players: dict[int, PlayerInfo] | None = None,
         fail: bool = False,
+        remote: bool = False,
     ) -> None:
         self.name = name
+        self.remote = remote
         self.prices = prices or {}
         self.players = players or {}
         self.fail = fail
@@ -118,13 +120,55 @@ async def test_failing_source_does_not_stop_collector(factory: sessionmaker[Sess
     assert [source for _, _, source in snapshots(factory)] == ["fallback"]
 
 
-async def test_first_source_with_price_wins(factory: sessionmaker[Session]) -> None:
+async def test_first_remote_source_with_price_wins(factory: sessionmaker[Session]) -> None:
     watch(factory, 1)
-    primary = FakeSource("primary", prices={1: 1000})
-    secondary = FakeSource("secondary", prices={1: 1100})
+    primary = FakeSource("primary", prices={1: 1000}, remote=True)
+    secondary = FakeSource("secondary", prices={1: 1100}, remote=True)
     await collect_once(factory, [primary, secondary], Platform.CONSOLE)
     assert secondary.calls == []
     assert snapshots(factory) == [(1, 1000, "primary")]
+
+
+async def test_remote_fallback_when_first_has_no_price(factory: sessionmaker[Session]) -> None:
+    watch(factory, 1)
+    primary = FakeSource("primary", remote=True)
+    secondary = FakeSource("secondary", prices={1: 1100}, remote=True)
+    result = await collect_once(factory, [primary, secondary], Platform.CONSOLE)
+    assert result.errors == {}
+    assert snapshots(factory) == [(1, 1100, "secondary")]
+
+
+async def test_local_sources_are_always_read(factory: sessionmaker[Session]) -> None:
+    watch(factory, 1)
+    manual = FakeSource("manual", prices={1: 900})
+    web = FakeSource("web", prices={1: 1000}, remote=True)
+    await collect_once(factory, [web, manual], Platform.CONSOLE)
+    assert snapshots(factory) == [(1, 900, "manual"), (1, 1000, "web")]
+
+
+async def test_remote_sources_rotate_per_player_and_run(factory: sessionmaker[Session]) -> None:
+    watch(factory, 1, 2, 3, 4)
+    a = FakeSource("a", prices=dict.fromkeys(range(1, 5), 100), remote=True)
+    b = FakeSource("b", prices=dict.fromkeys(range(1, 5), 100), remote=True)
+
+    await collect_once(factory, [a, b], Platform.CONSOLE, rotation=0)
+    assert len(a.calls) == 2
+    assert len(b.calls) == 2
+    first_run_a = set(a.calls)
+
+    a.calls.clear()
+    b.calls.clear()
+    await collect_once(factory, [a, b], Platform.CONSOLE, rotation=1)
+    assert set(b.calls) == first_run_a  # each player switches source between runs
+
+
+def test_source_order() -> None:
+    local = FakeSource("local")
+    r1, r2, r3 = (FakeSource(n, remote=True) for n in ("r1", "r2", "r3"))
+    assert [s.name for s in source_order([r1, local, r2, r3], 0)] == ["local", "r1", "r2", "r3"]
+    assert [s.name for s in source_order([r1, local, r2, r3], 1)] == ["local", "r2", "r3", "r1"]
+    assert [s.name for s in source_order([r1, r2, r3], 5)] == ["r3", "r1", "r2"]
+    assert [s.name for s in source_order([local], 7)] == ["local"]
 
 
 async def test_missing_player_details_are_filled(factory: sessionmaker[Session]) -> None:
@@ -144,6 +188,7 @@ async def test_empty_watchlist(factory: sessionmaker[Session]) -> None:
 
 
 def make_settings(tmp_path: Path, **overrides: object) -> Settings:
+    overrides.setdefault("sources", "")  # never enable web sources in tests
     return Settings(_env_file=None, db_path=tmp_path / "fcast.db", **overrides)  # type: ignore[arg-type]
 
 

@@ -127,3 +127,18 @@ def test_prices_import_reports_format_errors(db_path: Path, tmp_path: Path) -> N
     result = runner.invoke(app, ["prices", "import", str(bad)])
     assert result.exit_code == 1
     assert "invalid price" in result.output
+
+
+def test_watch_add_with_futbin_link(db_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["watch", "add", "190042", "--futbin", "https://www.futbin.com/27/player/21487/maradona"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "futbin" in runner.invoke(app, ["watch", "list"]).output
+
+
+def test_watch_add_rejects_invalid_futbin_link(db_path: Path) -> None:
+    result = runner.invoke(app, ["watch", "add", "1", "--futbin", "https://www.fut.gg/x"])
+    assert result.exit_code != 0
+    assert "FUTBIN" in result.output

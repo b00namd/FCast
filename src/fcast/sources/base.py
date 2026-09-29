@@ -15,6 +15,10 @@ class PlayerNotFoundError(SourceError):
     pass
 
 
+class NoPriceError(PlayerNotFoundError):
+    """The card exists but no price is listed (e.g. untradeable or extinct)."""
+
+
 class RobotsDisallowedError(SourceError):
     pass
 
@@ -44,6 +48,8 @@ class PriceSource(ABC):
     """A read-only provider of public price data."""
 
     name: str
+    # Remote sources are rotated per player to spread the load; local ones are always read.
+    remote: bool = False
 
     @abstractmethod
     async def fetch_price(self, ea_id: int, platform: Platform) -> PriceQuote:

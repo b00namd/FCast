@@ -144,3 +144,15 @@ class AlertLog(Base):
     player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id", ondelete="SET NULL"))
     message: Mapped[str]
     sent_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class SourceRef(Base):
+    """How a web source identifies a card, e.g. the FUTBIN page path for an EA card id."""
+
+    __tablename__ = "source_refs"
+
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.id", ondelete="CASCADE"), primary_key=True
+    )
+    source: Mapped[str] = mapped_column(String(32), primary_key=True)
+    external_ref: Mapped[str] = mapped_column(String(200))

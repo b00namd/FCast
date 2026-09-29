@@ -5,6 +5,12 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 ## [Unreleased]
 
 ### Phase 2 – Preisquellen & Collector
+- **Nachtrag:** FUTBIN-Adapter (Preis Konsole/PC, Aktualisierungszeit, Spielerdaten aus der
+  Spielerseite). Web-Quellen werden über `FCAST_SOURCES` aktiviert (Default `futbin`).
+  Neue Tabelle `source_refs` für den FUTBIN-Link je Karte, CLI `fcast watch add … --futbin <url>`.
+  Lastverteilung: lokale Quellen (CSV) werden immer gelesen, Web-Quellen pro Spieler und Lauf
+  rotiert, bei Ausfall springt die nächste ein. FUT.GG (Preis nur via gesperrter API) und FUTWIZ
+  (Cloudflare-Challenge) sind technisch nicht nutzbar, siehe `docs/sources.md`.
 - Prüfung der Web-Quellen (Stand 29.09.2026): FUT.GG (Stormstrike Inc., ToS vom 13.05.2026) und
   FUTBIN (Better Collective, ToS vom 24.02.2026) verbieten automatisierten Zugriff bzw. Scraping
   ohne ausdrückliche Erlaubnis. FUT.GG sperrt zusätzlich `/api/*` per robots.txt. **Deshalb ist

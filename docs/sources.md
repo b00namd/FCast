@@ -20,6 +20,19 @@ Stand der Prüfung: 29.09.2026. Es wurden nur robots.txt- und AGB-Seiten abgeruf
 | EA Ratings / drop-api | nein (nur Stammdaten) | inoffizielles JSON | Rechtevorbehalt gegen Text- und Data-Mining (Art. 4 DSM-RL) | EA User Agreement 14.05.2026 | ❌ verboten ohne schriftliche Freigabe |
 | Wrapper (Apify, futbin-sdk, GitHub-Scraper) | – | – | – | übernehmen FUTBIN-/FUTWIZ-Verbote | ❌ verboten |
 
+## Entscheidung und technische Prüfung (29.09.2026)
+
+Der Nutzer hat entschieden, FUT.GG, FUTBIN und FUTWIZ (statt FUTNext) trotz der AGB abzufragen und das
+Risiko selbst zu tragen (siehe `CLAUDE.md`). robots.txt, Rate-Limit, ehrlicher User-Agent und „kein
+Umgehen von Bot-Schutz“ gelten weiter. Die technische Prüfung ergab:
+
+| Quelle | Ergebnis | Grund |
+|---|---|---|
+| FUTBIN | ✅ eingebaut | Preis für Konsole und PC, „Price Updated“ und Spielerdaten stehen im HTML der Spielerseite. Karten haben eine eigene FUTBIN-ID plus Namens-Slug (`/27/player/21487/maradona`); der Link wird je Karte gespeichert (`fcast watch add … --futbin <url>`). |
+| FUT.GG | ❌ nicht nutzbar | Die Spielerseite enthält nur einen Lade-Platzhalter; der Preis kommt aus `/api/*`, das robots.txt sperrt. |
+| FUTWIZ | ❌ nicht nutzbar | Cloudflare-Challenge („Just a moment…“, HTTP 403) für jeden nicht-Browser-Client. |
+| FUTNext | ⚠️ möglich, nicht eingebaut | Preis im HTML, aber gerundet („4.26M“) und nur Konsole; URL nutzt die EA-ID. |
+
 ## Kontakte für Erlaubnisanfragen
 
 - FUT.GG: business@stormstrike.gg

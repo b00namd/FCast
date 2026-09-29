@@ -109,9 +109,23 @@ def watch_add(
     name: Annotated[
         str | None, typer.Option("--name", help="Player name, if not yet known.")
     ] = None,
+    futbin: Annotated[
+        str | None,
+        typer.Option(
+            "--futbin", help="FUTBIN page of this card, e.g. .../27/player/21487/maradona"
+        ),
+    ] = None,
 ) -> None:
     """Add a player to the watchlist or update the existing entry."""
     from fcast.db import repositories as repo
+    from fcast.sources import futbin as futbin_source
+
+    futbin_ref = None
+    if futbin is not None:
+        try:
+            futbin_ref = futbin_source.normalize_ref(futbin)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc), param_hint="--futbin") from exc
 
     if buy is not None and sell is not None and sell * 0.95 <= buy:
         typer.secho(
@@ -122,6 +136,8 @@ def watch_add(
     with _db_session() as session:
         player = repo.upsert_player(session, ea_id, repo.PlayerDetails(name=name))
         repo.set_watch(session, player, target_buy=buy, target_sell=sell, note=note)
+        if futbin_ref is not None:
+            repo.set_source_ref(session, player, futbin_source.SOURCE_NAME, futbin_ref)
         typer.echo(
             f"Watching {player.display_name}: buy {format_coins(buy)}, sell {format_coins(sell)}"
         )
@@ -148,6 +164,7 @@ def watch_list(
         table.add_column("Target sell", justify="right")
         if show_all:
             table.add_column("Active")
+        table.add_column("Sources")
         table.add_column("Note")
         for entry in entries:
             row = [
@@ -158,6 +175,7 @@ def watch_list(
             ]
             if show_all:
                 row.append("yes" if entry.active else "no")
+            row.append(", ".join(sorted(repo.list_source_refs(session, entry.player))) or "-")
             row.append(entry.note or "")
             table.add_row(*row)
         console.print(table)

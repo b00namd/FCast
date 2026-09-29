@@ -26,6 +26,7 @@ def db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Point the application settings at a temporary database file."""
     path = tmp_path / "fcast.db"
     monkeypatch.setenv("FCAST_DB_PATH", str(path))
+    monkeypatch.setenv("FCAST_SOURCES", "")  # tests never talk to real websites
     get_settings.cache_clear()
     yield path
     get_settings.cache_clear()

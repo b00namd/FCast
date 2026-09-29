@@ -21,6 +21,7 @@ from fcast.db.models import (
     PriceSnapshot,
     Promo,
     PromoLink,
+    SourceRef,
     WatchlistEntry,
 )
 
@@ -78,6 +79,30 @@ def upsert_player(session: Session, ea_id: int, details: PlayerDetails | None = 
                 setattr(player, field, value)
     session.flush()
     return player
+
+
+def set_source_ref(session: Session, player: Player, source: str, external_ref: str) -> SourceRef:
+    ref = session.get(SourceRef, (player.id, source))
+    if ref is None:
+        ref = SourceRef(player_id=player.id, source=source, external_ref=external_ref)
+        session.add(ref)
+    else:
+        ref.external_ref = external_ref
+    session.flush()
+    return ref
+
+
+def get_source_ref(session: Session, ea_id: int, source: str) -> str | None:
+    return session.scalar(
+        select(SourceRef.external_ref)
+        .join(Player, Player.id == SourceRef.player_id)
+        .where(Player.ea_id == ea_id, SourceRef.source == source)
+    )
+
+
+def list_source_refs(session: Session, player: Player) -> dict[str, str]:
+    refs = session.scalars(select(SourceRef).where(SourceRef.player_id == player.id))
+    return {ref.source: ref.external_ref for ref in refs}
 
 
 # --- price snapshots -------------------------------------------------------

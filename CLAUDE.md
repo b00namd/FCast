@@ -13,7 +13,13 @@ Den Ablauf in Phasen beschreibt `PLAN.md`. Es wird immer nur eine Phase umgesetz
   FCast liest nur öffentliche Preisdaten und gibt Empfehlungen aus.
 - Externe Datenquellen (z. B. FUT.GG, FUTBIN) werden rücksichtsvoll abgefragt:
   `robots.txt` respektieren, maximal 1 Request pro 3 Sekunden pro Host, eigener User-Agent,
-  Caching, exponentielles Backoff bei Fehlern. Nutzungsbedingungen der Quellen vor dem Einbau prüfen.
+  Caching, exponentielles Backoff bei Fehlern. Nutzungsbedingungen der Quellen vor dem Einbau prüfen
+  und das Ergebnis in `docs/sources.md` festhalten.
+- **Entscheidung des Nutzers (29.09.2026):** FUT.GG, FUTBIN und FUTNext werden trotz Scraping-Verbot
+  in den Nutzungsbedingungen abgefragt; das Risiko (IP-Sperre, rechtliche Schritte) trägt der Nutzer.
+  Weiterhin verbindlich: `robots.txt`, Rate-Limit, ehrlicher User-Agent, keine Logins,
+  kein Umgehen von Bot-Schutz (Cloudflare-Challenges, Proxy-/IP-Rotation, gefälschte User-Agents).
+  Blockt eine Quelle, fällt sie aus – sie wird nicht ausgetrickst. Last wird auf die Quellen verteilt.
 - In Tests keine Live-Requests. Stattdessen gespeicherte HTML/JSON-Fixtures unter `tests/fixtures/` verwenden.
 - Secrets (Telegram-Token usw.) nur über `.env`, niemals committen.
 

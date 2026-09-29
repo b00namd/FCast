@@ -59,18 +59,34 @@ def store_quote(session: Session, player: Player, quote: PriceQuote) -> bool:
     return True
 
 
-async def _first_quote(
+def source_order(sources: Sequence[PriceSource], offset: int) -> list[PriceSource]:
+    """Local sources first, then remote sources rotated by `offset` to spread the load."""
+    local = [source for source in sources if not source.remote]
+    remote = [source for source in sources if source.remote]
+    if remote:
+        shift = offset % len(remote)
+        remote = remote[shift:] + remote[:shift]
+    return local + remote
+
+
+async def _collect_quotes(
     sources: Sequence[PriceSource], ea_id: int, platform: Platform, result: CollectResult
-) -> PriceQuote | None:
+) -> list[PriceQuote]:
+    """Every local source is read; of the remote sources only the first one with a price."""
+    quotes: list[PriceQuote] = []
+    have_remote = False
     for source in sources:
+        if source.remote and have_remote:
+            continue
         try:
-            return await source.fetch_price(ea_id, platform)
-        except PlayerNotFoundError:
-            logger.debug("%s has no price for %s", source.name, ea_id)
+            quotes.append(await source.fetch_price(ea_id, platform))
+            have_remote = have_remote or source.remote
+        except PlayerNotFoundError as exc:
+            logger.debug("%s has no price for %s: %s", source.name, ea_id, exc)
         except Exception as exc:  # a broken source must never stop the collector
             logger.warning("%s failed for %s: %s", source.name, ea_id, exc)
             result.add_error(source.name, f"{ea_id}: {exc}")
-    return None
+    return quotes
 
 
 async def _first_player_info(
@@ -88,8 +104,15 @@ async def _first_player_info(
 
 
 async def collect_once(
-    factory: sessionmaker[Session], sources: Sequence[PriceSource], platform: Platform
+    factory: sessionmaker[Session],
+    sources: Sequence[PriceSource],
+    platform: Platform,
+    rotation: int = 0,
 ) -> CollectResult:
+    """Collect prices for all active watchlist players.
+
+    `rotation` shifts which remote source is asked first; the collector increments it per run.
+    """
     result = CollectResult(started_at=utcnow())
     with session_scope(factory) as session:
         targets = [
@@ -98,10 +121,12 @@ async def collect_once(
         ]
     result.players = len(targets)
 
-    for ea_id, needs_details in targets:
-        info = await _first_player_info(sources, ea_id, result) if needs_details else None
-        quote = await _first_quote(sources, ea_id, platform, result)
-        if quote is None:
+    for index, (ea_id, needs_details) in enumerate(targets):
+        ordered = source_order(sources, rotation + index)
+        quotes = await _collect_quotes(ordered, ea_id, platform, result)
+        # After the price so that remote sources can answer from their page cache.
+        info = await _first_player_info(ordered, ea_id, result) if needs_details else None
+        if not quotes:
             result.missing.append(ea_id)
         # One short transaction per player: a failure only affects that player.
         try:
@@ -109,7 +134,7 @@ async def collect_once(
                 player = repo.upsert_player(session, ea_id)
                 if info is not None:
                     apply_player_info(session, info)
-                if quote is not None:
+                for quote in quotes:
                     if store_quote(session, player, quote):
                         result.stored += 1
                     else:

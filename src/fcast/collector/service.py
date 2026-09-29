@@ -13,6 +13,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fcast.collector.job import CollectResult, collect_once
 from fcast.config import Settings
 from fcast.db import migrate
+from fcast.db import repositories as repo
 from fcast.db.session import create_db_engine, create_session_factory
 from fcast.sources.base import PriceSource
 from fcast.sources.registry import build_sources
@@ -28,18 +29,26 @@ class Collector:
         migrate.upgrade(settings.db_url)
         self.engine = create_db_engine(settings.db_url)
         self.session_factory = create_session_factory(self.engine)
-        self.sources = list(sources) if sources is not None else build_sources(settings)
+        self.sources = (
+            list(sources) if sources is not None else build_sources(settings, self._lookup_ref)
+        )
         self.last_result: CollectResult | None = None
+        self._runs = 0
         self._lock = asyncio.Lock()
 
     async def run_once(self) -> CollectResult:
         async with self._lock:  # never run two collections at the same time
             if not self.sources:
-                logger.warning("no price sources configured (set FCAST_MANUAL_CSV)")
+                logger.warning("no price sources configured (FCAST_SOURCES / FCAST_MANUAL_CSV)")
             self.last_result = await collect_once(
-                self.session_factory, self.sources, self.settings.platform
+                self.session_factory, self.sources, self.settings.platform, rotation=self._runs
             )
+            self._runs += 1
             return self.last_result
+
+    def _lookup_ref(self, ea_id: int, source: str) -> str | None:
+        with self.session_factory() as session:
+            return repo.get_source_ref(session, ea_id, source)
 
     async def aclose(self) -> None:
         for source in self.sources:
