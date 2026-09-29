@@ -1,0 +1,42 @@
+# Preisquellen – Prüfung und Status
+
+Regel aus `CLAUDE.md`: Eine Web-Quelle wird nur eingebaut, wenn robots.txt **und** Nutzungsbedingungen
+automatisierten Zugriff erlauben oder eine schriftliche Erlaubnis vorliegt.
+
+Stand der Prüfung: 29.09.2026. Es wurden nur robots.txt- und AGB-Seiten abgerufen, keine Preisdaten.
+
+## Übersicht
+
+| Quelle | Preise FC 27 | Zugang | robots.txt | AGB | Status |
+|---|---|---|---|---|---|
+| FUT.GG (Stormstrike Inc.) | ja | HTML, interne API | `/api/*` gesperrt | Bots/Scraper verboten, „except where expressly permitted“ (ToS 13.05.2026) | ❌ verboten – Erlaubnis wird angefragt |
+| FUTBIN (Better Collective A/S) | ja | HTML | URLs mit `?` gesperrt | „No Scraping or Data Mining“ ohne schriftliche Erlaubnis (ToS 24.02.2026) | ❌ verboten – Erlaubnis wird angefragt |
+| FUTNext (FUTNext LTD) | ja (PS/XB) | HTML, Echtzeit nur im Abo | weitgehend erlaubt | kein explizites Scraping-Verbot, aber Kopieren/Spiegeln untersagt (Terms 09.03.2024) | ⚠️ unklar – nur mit Erlaubnis |
+| FUTWIZ | ja | HTML, Cloudflare blockt Bots | `Allow: /`, `ai-train=no` | nicht lesbar (403) | ⚠️ unklar |
+| FUTDB (futdb.app) | früher API mit Key | Dienst offline (HTTP 520) | – | nicht lesbar | ⚠️ beobachten |
+| EasySBC | ja | SPA | fast alles erlaubt | „No Web Scraping, Crawling or Data Mining“ (Terms 14.09.2026) | ❌ verboten |
+| FUT Alert | ja | SPA | alles erlaubt | keine AGB gefunden, vermutlich gleicher Betreiber wie EasySBC | ⚠️ unklar, eher nein |
+| RenderZ | FC Mobile | SPA/API | `/api/*` gesperrt | – | ❌ ungeeignet |
+| EA Ratings / drop-api | nein (nur Stammdaten) | inoffizielles JSON | Rechtevorbehalt gegen Text- und Data-Mining (Art. 4 DSM-RL) | EA User Agreement 14.05.2026 | ❌ verboten ohne schriftliche Freigabe |
+| Wrapper (Apify, futbin-sdk, GitHub-Scraper) | – | – | – | übernehmen FUTBIN-/FUTWIZ-Verbote | ❌ verboten |
+
+## Kontakte für Erlaubnisanfragen
+
+- FUT.GG: business@stormstrike.gg
+- FUTBIN: business@futbin.com
+- FUTNext: support@futnext.com
+
+## Anfragen
+
+| Quelle | Gesendet am | Antwort | Ergebnis |
+|---|---|---|---|
+| FUT.GG | | | |
+| FUTBIN | | | |
+| FUTNext | | | |
+
+Eine schriftliche Erlaubnis bitte hier vermerken (Datum, Umfang, Auflagen) und die Mail aufbewahren.
+Erst danach wird der jeweilige Adapter gebaut – mit den Auflagen als Konfiguration (z. B. Intervall).
+
+## Aktuell aktive Quelle
+
+`ManualSource` (CSV, `FCAST_MANUAL_CSV`) – siehe Modul-Docstring in `src/fcast/sources/manual.py`.
