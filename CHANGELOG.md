@@ -4,6 +4,26 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Phase 2 – Preisquellen & Collector
+- Prüfung der Web-Quellen (Stand 29.09.2026): FUT.GG (Stormstrike Inc., ToS vom 13.05.2026) und
+  FUTBIN (Better Collective, ToS vom 24.02.2026) verbieten automatisierten Zugriff bzw. Scraping
+  ohne ausdrückliche Erlaubnis. FUT.GG sperrt zusätzlich `/api/*` per robots.txt. **Deshalb ist
+  kein Web-Adapter eingebaut.**
+- Interface `PriceSource` (`fetch_price`, `fetch_player`) mit `PriceQuote`/`PlayerInfo`.
+- `ManualSource`: CSV-Datei (`FCAST_MANUAL_CSV`), Tausendertrenner erlaubt, Zeitstempel ohne
+  Offset in `FCAST_TIMEZONE` (Default Europe/Berlin), mehrere Zeilen je Karte als Historie.
+- `PoliteHttpClient` für künftige, erlaubte Web-Quellen: robots.txt (RFC 9309), ≥ 3 s Abstand
+  pro Host, 5-Min.-Cache, Retry mit exponentiellem Backoff und `Retry-After`, eigener User-Agent
+  (Kontakt optional über `FCAST_HTTP_CONTACT`).
+- Collector: holt Preise aller aktiven Watchlist-Spieler, erste Quelle mit Preis gewinnt,
+  identische Quotes werden nicht doppelt gespeichert, fehlende Spielerdaten werden ergänzt.
+  Fehler einer Quelle werden geloggt und stoppen den Lauf nicht.
+- APScheduler (Intervall aus `FCAST_COLLECT_INTERVAL_MIN`, erster Lauf sofort, keine
+  Überlappung), sauberes Beenden bei SIGTERM.
+- CLI: `fcast collect [--once] [-v]`, `fcast prices import <csv>` für Historien-Import.
+- Docker: Container läuft dauerhaft als Collector (`restart: unless-stopped`), CSV-Eingang
+  über `./import/prices.csv`.
+
 ### Phase 1 – Datenmodell & Datenbank
 - SQLAlchemy-2.0-Modelle für `players`, `price_snapshots`, `watchlist`, `portfolio`, `promos`,
   `promo_links`, `alerts_log`. Zeitstempel werden als UTC gespeichert (naive Datumswerte werden abgelehnt),

@@ -1,7 +1,10 @@
 """Command line interface."""
 
+import asyncio
+import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -17,8 +20,10 @@ app = typer.Typer(
 )
 db_app = typer.Typer(help="Database maintenance.", no_args_is_help=True)
 watch_app = typer.Typer(help="Manage the watchlist.", no_args_is_help=True)
+prices_app = typer.Typer(help="Price data.", no_args_is_help=True)
 app.add_typer(db_app, name="db")
 app.add_typer(watch_app, name="watch")
+app.add_typer(prices_app, name="prices")
 
 console = Console()
 
@@ -47,6 +52,16 @@ def _db_session() -> Iterator[Session]:
             yield session
     finally:
         engine.dispose()
+
+
+def _setup_logging(verbose: bool) -> None:
+    logging.basicConfig(
+        level=logging.DEBUG if verbose else logging.INFO,
+        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+    )
+    # Keep third-party noise down unless explicitly asked for.
+    for noisy in ("httpx", "httpcore", "apscheduler", "alembic"):
+        logging.getLogger(noisy).setLevel(logging.DEBUG if verbose else logging.WARNING)
 
 
 @app.callback()
@@ -146,3 +161,57 @@ def watch_list(
             row.append(entry.note or "")
             table.add_row(*row)
         console.print(table)
+
+
+@app.command()
+def collect(
+    once: Annotated[bool, typer.Option("--once", help="Run a single collection and exit.")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Debug logging.")] = False,
+) -> None:
+    """Collect prices for all active watchlist players (every FCAST_COLLECT_INTERVAL_MIN)."""
+    from fcast.collector.service import Collector, run_forever
+
+    _setup_logging(verbose)
+    settings = get_settings()
+    if not once:
+        asyncio.run(run_forever(settings))
+        return
+
+    async def _run() -> None:
+        collector = Collector(settings)
+        try:
+            result = await collector.run_once()
+        finally:
+            await collector.aclose()
+        typer.echo(
+            f"{result.players} players: {result.stored} new snapshots, "
+            f"{result.unchanged} unchanged, {len(result.missing)} without price"
+        )
+        for source, messages in result.errors.items():
+            typer.secho(f"{source}: {len(messages)} error(s)", fg=typer.colors.RED, err=True)
+            for message in messages[:5]:
+                typer.echo(f"  {message}", err=True)
+
+    asyncio.run(_run())
+
+
+@prices_app.command("import")
+def prices_import(
+    csv_file: Annotated[
+        Path, typer.Argument(exists=True, dir_okay=False, readable=True, help="CSV file.")
+    ],
+) -> None:
+    """Import price history from a CSV file (same format as FCAST_MANUAL_CSV)."""
+    from fcast.collector.job import import_rows
+    from fcast.sources.base import SourceError
+    from fcast.sources.manual import parse_csv
+
+    settings = get_settings()
+    try:
+        rows = parse_csv(csv_file, settings.platform, settings.tz)
+    except SourceError as exc:
+        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
+    with _db_session() as session:
+        stored, unchanged = import_rows(session, [(row.player, row.quote) for row in rows])
+    typer.echo(f"Imported {stored} snapshots ({unchanged} already present).")

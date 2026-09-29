@@ -84,3 +84,46 @@ def test_watch_list_empty(db_path: Path) -> None:
     result = runner.invoke(app, ["watch", "list"])
     assert result.exit_code == 0
     assert "Watchlist is empty." in result.output
+
+
+FIXTURE_CSV = Path(__file__).parent / "fixtures" / "manual" / "prices.csv"
+
+
+def test_collect_once_with_manual_csv(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FCAST_MANUAL_CSV", str(FIXTURE_CSV))
+    get_settings.cache_clear()
+    runner.invoke(app, ["watch", "add", "231747", "--buy", "1100000"])
+    runner.invoke(app, ["watch", "add", "999999"])
+
+    result = runner.invoke(app, ["collect", "--once"])
+    assert result.exit_code == 0, result.output
+    assert "2 players: 1 new snapshots, 0 unchanged, 1 without price" in result.output
+
+    result = runner.invoke(app, ["collect", "--once"])
+    assert "0 new snapshots, 1 unchanged" in result.output
+
+    # Player details from the CSV are now known.
+    assert "Kylian Mbappé (91)" in runner.invoke(app, ["watch", "list"]).output
+
+
+def test_collect_once_without_sources(db_path: Path) -> None:
+    result = runner.invoke(app, ["collect", "--once"])
+    assert result.exit_code == 0, result.output
+    assert "0 players" in result.output
+
+
+def test_prices_import(db_path: Path) -> None:
+    result = runner.invoke(app, ["prices", "import", str(FIXTURE_CSV)])
+    assert result.exit_code == 0, result.output
+    assert "Imported 4 snapshots (0 already present)." in result.output
+
+    result = runner.invoke(app, ["prices", "import", str(FIXTURE_CSV)])
+    assert "Imported 0 snapshots (4 already present)." in result.output
+
+
+def test_prices_import_reports_format_errors(db_path: Path, tmp_path: Path) -> None:
+    bad = tmp_path / "bad.csv"
+    bad.write_text("ea_id,price\n1,abc\n", encoding="utf-8")
+    result = runner.invoke(app, ["prices", "import", str(bad)])
+    assert result.exit_code == 1
+    assert "invalid price" in result.output

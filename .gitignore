@@ -25,3 +25,6 @@ data/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Manual price import (may contain personal data)
+import/

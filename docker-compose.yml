@@ -5,16 +5,21 @@ services:
       dockerfile: docker/Dockerfile
     image: fcast:latest
     container_name: fcast
+    # Runs the collector every FCAST_COLLECT_INTERVAL_MIN minutes.
+    # From Phase 3 on the same process also serves the web dashboard.
+    command: ["collect"]
     env_file:
       - path: .env
         required: false
     environment:
       FCAST_DB_PATH: /data/fcast.db
+      FCAST_MANUAL_CSV: /import/prices.csv
     volumes:
       - fcast-data:/data
-    # Phase 0: the container prints its version and exits.
-    # From Phase 3 on it runs the web app + scheduler with `restart: unless-stopped`.
-    restart: "no"
+      # Drop a prices.csv here to feed the manual price source.
+      - ./import:/import:ro
+    restart: unless-stopped
+    stop_grace_period: 30s
 
 volumes:
   fcast-data:

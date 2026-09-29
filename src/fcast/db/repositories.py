@@ -131,6 +131,25 @@ def latest_snapshot(session: Session, player: Player, platform: Platform) -> Pri
     )
 
 
+def snapshot_exists(
+    session: Session, player: Player, platform: Platform, source: str, captured_at: datetime
+) -> bool:
+    """True if this exact quote (same source and timestamp) was stored before."""
+    return (
+        session.scalar(
+            select(PriceSnapshot.id)
+            .where(
+                PriceSnapshot.player_id == player.id,
+                PriceSnapshot.platform == platform,
+                PriceSnapshot.source == source,
+                PriceSnapshot.captured_at == captured_at,
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
 # --- watchlist -------------------------------------------------------------
 
 
