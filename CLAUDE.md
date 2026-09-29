@@ -15,11 +15,13 @@ Den Ablauf in Phasen beschreibt `PLAN.md`. Es wird immer nur eine Phase umgesetz
   `robots.txt` respektieren, maximal 1 Request pro 3 Sekunden pro Host, eigener User-Agent,
   Caching, exponentielles Backoff bei Fehlern. Nutzungsbedingungen der Quellen vor dem Einbau prüfen
   und das Ergebnis in `docs/sources.md` festhalten.
-- **Entscheidung des Nutzers (29.09.2026):** FUT.GG, FUTBIN und FUTNext werden trotz Scraping-Verbot
-  in den Nutzungsbedingungen abgefragt; das Risiko (IP-Sperre, rechtliche Schritte) trägt der Nutzer.
-  Weiterhin verbindlich: `robots.txt`, Rate-Limit, ehrlicher User-Agent, keine Logins,
-  kein Umgehen von Bot-Schutz (Cloudflare-Challenges, Proxy-/IP-Rotation, gefälschte User-Agents).
-  Blockt eine Quelle, fällt sie aus – sie wird nicht ausgetrickst. Last wird auf die Quellen verteilt.
+- **Entscheidung des Nutzers (29.09.2026):** Web-Quellen werden trotz Scraping-Verbot in den
+  Nutzungsbedingungen abgefragt; das Risiko (IP-Sperre, rechtliche Schritte) trägt der Nutzer.
+  Aktiv: FUTBIN (erste Wahl), FUTNext (Ersatz). FUT.GG und FUTWIZ sind technisch nicht nutzbar
+  (siehe `docs/sources.md`). Weiterhin verbindlich: `robots.txt`, Rate-Limit, ehrlicher User-Agent,
+  keine Logins, kein Umgehen von Bot-Schutz (Cloudflare-Challenges, Headless-Browser, Proxy-/IP-Rotation,
+  gefälschte User-Agents). Cookies nur für Seiteneinstellungen (z. B. Plattform), nie für Sessions.
+  Antwortet eine Quelle mit 403/429/Challenge, wird sie automatisch pausiert (Default 24 h).
 - In Tests keine Live-Requests. Stattdessen gespeicherte HTML/JSON-Fixtures unter `tests/fixtures/` verwenden.
 - Secrets (Telegram-Token usw.) nur über `.env`, niemals committen.
 

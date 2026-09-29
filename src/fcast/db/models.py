@@ -156,3 +156,16 @@ class SourceRef(Base):
     )
     source: Mapped[str] = mapped_column(String(32), primary_key=True)
     external_ref: Mapped[str] = mapped_column(String(200))
+
+
+class SourceStatus(Base):
+    """Health of a price source; `paused_until` is set when a site starts refusing us."""
+
+    __tablename__ = "source_status"
+
+    source: Mapped[str] = mapped_column(String(32), primary_key=True)
+    paused_until: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    pause_reason: Mapped[str | None] = mapped_column(String(500))
+    last_success_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_error_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_error: Mapped[str | None] = mapped_column(String(500))

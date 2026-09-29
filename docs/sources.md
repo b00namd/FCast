@@ -22,8 +22,8 @@ Stand der Prüfung: 29.09.2026. Es wurden nur robots.txt- und AGB-Seiten abgeruf
 
 ## Entscheidung und technische Prüfung (29.09.2026)
 
-Der Nutzer hat entschieden, FUT.GG, FUTBIN und FUTWIZ (statt FUTNext) trotz der AGB abzufragen und das
-Risiko selbst zu tragen (siehe `CLAUDE.md`). robots.txt, Rate-Limit, ehrlicher User-Agent und „kein
+Der Nutzer hat entschieden, Web-Quellen trotz der AGB abzufragen und das Risiko selbst zu tragen
+(siehe `CLAUDE.md`). Der Nutzer spielt auf **PC**. robots.txt, Rate-Limit, ehrlicher User-Agent und „kein
 Umgehen von Bot-Schutz“ gelten weiter. Die technische Prüfung ergab:
 
 | Quelle | Ergebnis | Grund |
@@ -31,13 +31,24 @@ Umgehen von Bot-Schutz“ gelten weiter. Die technische Prüfung ergab:
 | FUTBIN | ✅ eingebaut | Preis für Konsole und PC, „Price Updated“ und Spielerdaten stehen im HTML der Spielerseite. Karten haben eine eigene FUTBIN-ID plus Namens-Slug (`/27/player/21487/maradona`); der Link wird je Karte gespeichert (`fcast watch add … --futbin <url>`). |
 | FUT.GG | ❌ nicht nutzbar | Die Spielerseite enthält nur einen Lade-Platzhalter; der Preis kommt aus `/api/*`, das robots.txt sperrt. |
 | FUTWIZ | ❌ nicht nutzbar | Cloudflare-Challenge („Just a moment…“, HTTP 403) für jeden nicht-Browser-Client. |
-| FUTNext | ⚠️ möglich, nicht eingebaut | Preis im HTML, aber gerundet („4.26M“) und nur Konsole; URL nutzt die EA-ID. |
+| FUTNext | ✅ eingebaut (Ersatz) | Preis im HTML, gerundet („4.99M“ ≈ 10.000er-Genauigkeit bei Millionen), keine Aktualisierungszeit. URL nutzt die EA-ID (`/players/<slug>/<ea_id>`, Slug beliebig). PC-Preise nur mit dem Einstellungs-Cookie `settings={"state":{"platform":"pc"},"version":0}` (das setzt auch das Plattform-Menü der Seite); ohne Cookie zeigt die Seite Konsolenpreise – der Parser prüft das Plattform-Label. |
+
+## Schutz vor Sperren
+
+- Antwortet eine Quelle mit HTTP 403/429 oder einer Bot-Challenge, wird sie sofort für
+  `FCAST_SOURCE_PAUSE_H` Stunden (Default 24) pausiert – ohne weitere Versuche. Der Status steht in
+  der Tabelle `source_status` und übersteht Neustarts. Anzeigen: `fcast sources status`,
+  vorzeitig aufheben: `fcast sources resume <name>`.
+- Sammelläufe starten mit zufälliger Verzögerung bis `FCAST_COLLECT_JITTER_S` (Default 180 s).
+- Standard ist `FCAST_SOURCE_STRATEGY=priority` (FUTBIN zuerst, FUTNext nur als Ersatz), weil
+  FUTNext gerundete Preise liefert. `rotate` verteilt stattdessen pro Spieler und Lauf.
 
 ## Kontakte für Erlaubnisanfragen
 
 - FUT.GG: business@stormstrike.gg
 - FUTBIN: business@futbin.com
 - FUTNext: support@futnext.com
+- FUTWIZ: (keine Adresse gefunden, AGB hinter Cloudflare)
 
 ## Anfragen
 

@@ -23,6 +23,10 @@ class RobotsDisallowedError(SourceError):
     pass
 
 
+class SourceBlockedError(SourceError):
+    """The site is refusing us (403/429/bot challenge). The collector pauses the source."""
+
+
 @dataclass(frozen=True)
 class PriceQuote:
     ea_id: int

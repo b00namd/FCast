@@ -1,6 +1,6 @@
 import asyncio
 import shutil
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -12,13 +12,14 @@ from fcast.collector.service import JOB_ID, Collector, create_scheduler, run_for
 from fcast.config import Platform, Settings
 from fcast.db import repositories as repo
 from fcast.db.base import Base
-from fcast.db.models import PriceSnapshot
+from fcast.db.models import PriceSnapshot, SourceStatus
 from fcast.db.session import create_db_engine, create_session_factory
 from fcast.sources.base import (
     PlayerInfo,
     PlayerNotFoundError,
     PriceQuote,
     PriceSource,
+    SourceBlockedError,
     SourceError,
 )
 
@@ -151,14 +152,14 @@ async def test_remote_sources_rotate_per_player_and_run(factory: sessionmaker[Se
     a = FakeSource("a", prices=dict.fromkeys(range(1, 5), 100), remote=True)
     b = FakeSource("b", prices=dict.fromkeys(range(1, 5), 100), remote=True)
 
-    await collect_once(factory, [a, b], Platform.CONSOLE, rotation=0)
+    await collect_once(factory, [a, b], Platform.CONSOLE, rotation=0, rotate=True)
     assert len(a.calls) == 2
     assert len(b.calls) == 2
     first_run_a = set(a.calls)
 
     a.calls.clear()
     b.calls.clear()
-    await collect_once(factory, [a, b], Platform.CONSOLE, rotation=1)
+    await collect_once(factory, [a, b], Platform.CONSOLE, rotation=1, rotate=True)
     assert set(b.calls) == first_run_a  # each player switches source between runs
 
 
@@ -247,3 +248,91 @@ async def test_run_forever_runs_immediately_and_stops(tmp_path: Path) -> None:
         stop.set()
         await asyncio.wait_for(task, timeout=5)
         engine.dispose()
+
+
+class BlockingSource(FakeSource):
+    """Remote source that refuses every request like a site that blocked us."""
+
+    def __init__(self, name: str = "blocked") -> None:
+        super().__init__(name, remote=True)
+
+    async def fetch_price(self, ea_id: int, platform: Platform) -> PriceQuote:
+        self.calls.append(ea_id)
+        raise SourceBlockedError("HTTP 429")
+
+
+def statuses(factory: sessionmaker[Session]) -> dict[str, SourceStatus]:
+    with factory() as session:
+        return {s.source: s for s in repo.list_source_statuses(session)}
+
+
+async def test_blocked_source_is_paused_and_fallback_used(factory: sessionmaker[Session]) -> None:
+    watch(factory, 1, 2, 3)
+    blocked = BlockingSource()
+    fallback = FakeSource("fallback", prices={1: 10, 2: 20, 3: 30}, remote=True)
+
+    result = await collect_once(
+        factory, [blocked, fallback], Platform.PC, pause=timedelta(hours=24)
+    )
+
+    assert blocked.calls == [1]  # never asked again during the run
+    assert result.stored == 3
+    assert result.paused == {"blocked": "HTTP 429"}
+    assert result.errors == {}
+    status = statuses(factory)["blocked"]
+    assert status.paused_until is not None
+    assert status.paused_until - result.finished_at == timedelta(hours=24)  # type: ignore[operator]
+    assert status.pause_reason == "HTTP 429"
+    assert statuses(factory)["fallback"].last_success_at is not None
+
+
+async def test_paused_source_is_skipped_until_pause_ends(factory: sessionmaker[Session]) -> None:
+    watch(factory, 1)
+    source = FakeSource("web", prices={1: 10}, remote=True)
+    with factory.begin() as session:
+        repo.pause_source(session, "web", datetime.now(UTC) + timedelta(hours=1), "HTTP 403")
+
+    result = await collect_once(factory, [source], Platform.PC)
+    assert source.calls == []
+    assert result.skipped == ["web"]
+    assert result.missing == [1]
+
+    with factory.begin() as session:
+        repo.pause_source(session, "web", datetime.now(UTC) - timedelta(seconds=1), "HTTP 403")
+    result = await collect_once(factory, [source], Platform.PC)
+    assert source.calls == [1]
+    assert result.stored == 1
+
+
+async def test_resume_source(factory: sessionmaker[Session]) -> None:
+    with factory.begin() as session:
+        repo.pause_source(session, "web", datetime.now(UTC) + timedelta(hours=1), "x")
+        repo.resume_source(session, "web")
+        assert repo.paused_sources(session, datetime.now(UTC)) == set()
+
+
+async def test_errors_are_recorded_in_source_status(factory: sessionmaker[Session]) -> None:
+    watch(factory, 1)
+    await collect_once(factory, [FakeSource("broken", fail=True, remote=True)], Platform.PC)
+    status = statuses(factory)["broken"]
+    assert status.last_error is not None
+    assert "site down" in status.last_error
+    assert status.last_success_at is None
+    assert status.paused_until is None  # ordinary errors do not pause a source
+
+
+async def test_priority_strategy_always_asks_first_source(factory: sessionmaker[Session]) -> None:
+    watch(factory, 1, 2, 3)
+    first = FakeSource("first", prices=dict.fromkeys(range(1, 4), 5), remote=True)
+    second = FakeSource("second", prices=dict.fromkeys(range(1, 4), 6), remote=True)
+    for run in range(2):
+        await collect_once(factory, [first, second], Platform.PC, rotation=run)
+    assert second.calls == []
+    assert len(first.calls) == 6
+
+
+async def test_scheduler_jitter(tmp_path: Path) -> None:
+    collector = Collector(make_settings(tmp_path), sources=[])
+    scheduler = create_scheduler(collector, 30, jitter_s=180)
+    assert scheduler.get_job(JOB_ID).trigger.jitter == 180
+    await collector.aclose()

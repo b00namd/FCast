@@ -4,6 +4,7 @@ import asyncio
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -21,9 +22,11 @@ app = typer.Typer(
 db_app = typer.Typer(help="Database maintenance.", no_args_is_help=True)
 watch_app = typer.Typer(help="Manage the watchlist.", no_args_is_help=True)
 prices_app = typer.Typer(help="Price data.", no_args_is_help=True)
+sources_app = typer.Typer(help="Price source health.", no_args_is_help=True)
 app.add_typer(db_app, name="db")
 app.add_typer(watch_app, name="watch")
 app.add_typer(prices_app, name="prices")
+app.add_typer(sources_app, name="sources")
 
 console = Console()
 
@@ -205,6 +208,15 @@ def collect(
             f"{result.players} players: {result.stored} new snapshots, "
             f"{result.unchanged} unchanged, {len(result.missing)} without price"
         )
+        for source, reason in result.paused.items():
+            typer.secho(
+                f"{source} refused requests and is paused for "
+                f"{settings.source_pause_h} h: {reason}",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
+        if result.skipped:
+            typer.echo(f"Skipped paused sources: {', '.join(result.skipped)}", err=True)
         for source, messages in result.errors.items():
             typer.secho(f"{source}: {len(messages)} error(s)", fg=typer.colors.RED, err=True)
             for message in messages[:5]:
@@ -233,3 +245,50 @@ def prices_import(
     with _db_session() as session:
         stored, unchanged = import_rows(session, [(row.player, row.quote) for row in rows])
     typer.echo(f"Imported {stored} snapshots ({unchanged} already present).")
+
+
+def _format_time(value: datetime | None) -> str:
+    if value is None:
+        return "-"
+    return value.astimezone(get_settings().tz).strftime("%d.%m. %H:%M")
+
+
+@sources_app.command("status")
+def sources_status() -> None:
+    """Show configured sources, last success/error and active pauses."""
+    from fcast.db import repositories as repo
+    from fcast.db.base import utcnow
+
+    settings = get_settings()
+    configured = settings.web_sources + (["manual"] if settings.manual_csv else [])
+    with _db_session() as session:
+        statuses = {status.source: status for status in repo.list_source_statuses(session)}
+        table = Table(title=f"Sources ({settings.source_strategy})")
+        for column in ("Source", "Enabled", "Last success", "Last error", "Paused until"):
+            table.add_column(column)
+        now = utcnow()
+        for name in dict.fromkeys([*configured, *statuses]):
+            status = statuses.get(name)
+            paused = (
+                status is not None and status.paused_until is not None and status.paused_until > now
+            )
+            table.add_row(
+                name,
+                "yes" if name in configured else "no",
+                _format_time(status.last_success_at if status else None),
+                (status.last_error or "-")[:60] if status else "-",
+                f"{_format_time(status.paused_until)} ({status.pause_reason})"[:80]
+                if paused and status
+                else "-",
+            )
+        console.print(table)
+
+
+@sources_app.command("resume")
+def sources_resume(name: Annotated[str, typer.Argument(help="Source name, e.g. futbin.")]) -> None:
+    """Lift a pause before it expires (only if you are sure the block is over)."""
+    from fcast.db import repositories as repo
+
+    with _db_session() as session:
+        repo.resume_source(session, name.lower())
+    typer.echo(f"{name} resumed.")

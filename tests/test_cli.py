@@ -142,3 +142,28 @@ def test_watch_add_rejects_invalid_futbin_link(db_path: Path) -> None:
     result = runner.invoke(app, ["watch", "add", "1", "--futbin", "https://www.fut.gg/x"])
     assert result.exit_code != 0
     assert "FUTBIN" in result.output
+
+
+def test_sources_status_and_resume(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from fcast.db import repositories as repo
+    from fcast.db.session import create_db_engine, create_session_factory
+
+    monkeypatch.setenv("FCAST_SOURCES", "futbin,futnext")
+    get_settings.cache_clear()
+    assert runner.invoke(app, ["db", "upgrade"]).exit_code == 0
+    engine = create_db_engine(get_settings().db_url)
+    with create_session_factory(engine).begin() as session:
+        repo.pause_source(session, "futbin", datetime.now(UTC) + timedelta(hours=5), "HTTP 429")
+    engine.dispose()
+
+    result = runner.invoke(app, ["sources", "status"])
+    assert result.exit_code == 0, result.output
+    assert "futbin" in result.output
+    assert "futnext" in result.output
+    assert "HTTP 429" in result.output
+
+    result = runner.invoke(app, ["sources", "resume", "futbin"])
+    assert result.exit_code == 0
+    assert "HTTP 429" not in runner.invoke(app, ["sources", "status"]).output

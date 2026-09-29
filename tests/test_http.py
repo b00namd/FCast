@@ -6,7 +6,12 @@ from itertools import pairwise
 import httpx
 import pytest
 
-from fcast.sources.base import PlayerNotFoundError, RobotsDisallowedError, SourceError
+from fcast.sources.base import (
+    PlayerNotFoundError,
+    RobotsDisallowedError,
+    SourceBlockedError,
+    SourceError,
+)
 from fcast.sources.http import PoliteHttpClient, RateLimiter, TTLCache
 
 ROBOTS = "User-agent: *\nDisallow: /api/\n"
@@ -160,7 +165,7 @@ async def test_retry_with_exponential_backoff() -> None:
 
 async def test_retry_after_header_is_honoured() -> None:
     responses = iter(
-        [httpx.Response(429, headers={"Retry-After": "30"}), httpx.Response(200, text="ok")]
+        [httpx.Response(503, headers={"Retry-After": "30"}), httpx.Response(200, text="ok")]
     )
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -226,3 +231,61 @@ def test_ttl_cache_disabled_with_zero_ttl() -> None:
     cache: TTLCache[str] = TTLCache(0)
     cache.set("k", "v")
     assert cache.get("k") is None
+
+
+@pytest.mark.parametrize("status", [403, 429])
+async def test_block_statuses_are_not_retried(status: int) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404)
+        return httpx.Response(status)
+
+    client, recorder, _ = make_client(handler)
+    with pytest.raises(SourceBlockedError, match=f"HTTP {status}"):
+        await client.get_text("https://example.com/x")
+    await client.aclose()
+    assert recorder.paths().count("/x") == 1
+
+
+async def test_bot_challenge_is_detected_and_not_retried() -> None:
+    challenge = "<html><title>Just a moment...</title><script src='/cdn-cgi/challenge-platform/x'>"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404)
+        return httpx.Response(503, text=challenge)
+
+    client, recorder, _ = make_client(handler)
+    with pytest.raises(SourceBlockedError, match="bot challenge"):
+        await client.get_text("https://example.com/x")
+    await client.aclose()
+    assert recorder.paths().count("/x") == 1
+
+
+async def test_blocked_robots_txt_counts_as_block() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, text="<title>Attention Required! | Cloudflare</title>")
+
+    client, recorder, _ = make_client(handler)
+    with pytest.raises(SourceBlockedError):
+        await client.get_text("https://example.com/x")
+    await client.aclose()
+    assert recorder.paths() == ["/robots.txt"]
+
+
+async def test_cookies_are_sent_and_part_of_cache_key() -> None:
+    seen: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404)
+        seen.append(request.headers.get("Cookie"))
+        return httpx.Response(200, text=request.headers.get("Cookie", "none"))
+
+    client, _, _ = make_client(handler)
+    assert await client.get_text("https://example.com/p", {"settings": "pc"}) == "settings=pc"
+    assert await client.get_text("https://example.com/p", {"settings": "ps"}) == "settings=ps"
+    assert await client.get_text("https://example.com/p", {"settings": "pc"}) == "settings=pc"
+    assert await client.get_text("https://example.com/p") == "none"
+    await client.aclose()
+    assert seen == ["settings=pc", "settings=ps", None]

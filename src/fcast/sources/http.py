@@ -16,14 +16,22 @@ from urllib.robotparser import RobotFileParser
 
 import httpx
 
-from fcast.sources.base import PlayerNotFoundError, RobotsDisallowedError, SourceError
+from fcast.sources.base import (
+    PlayerNotFoundError,
+    RobotsDisallowedError,
+    SourceBlockedError,
+    SourceError,
+)
 
 logger = logging.getLogger(__name__)
 
 Clock = Callable[[], float]
 Sleep = Callable[[float], Awaitable[None]]
 
-RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+RETRY_STATUSES = frozenset({500, 502, 503, 504})
+# A site that answers like this wants us gone: no retries, the caller pauses the source.
+BLOCK_STATUSES = frozenset({403, 429})
+CHALLENGE_MARKERS = ("cf-chl", "challenge-platform", "Just a moment...", "Attention Required!")
 MAX_BACKOFF_S = 120.0
 ROBOTS_TTL_S = 24 * 3600.0
 ROBOTS_AGENT = "FCast"
@@ -74,6 +82,21 @@ class TTLCache[V]:
             self._items[key] = (self._clock() + self.ttl, value)
 
 
+def is_challenge(response: httpx.Response) -> bool:
+    """Bot-protection interstitial (e.g. Cloudflare) instead of real content."""
+    if response.status_code < 400:
+        return False
+    text = response.text[:20_000]
+    return any(marker in text for marker in CHALLENGE_MARKERS)
+
+
+def raise_if_blocked(response: httpx.Response, url: str) -> None:
+    if is_challenge(response):
+        raise SourceBlockedError(f"bot challenge (HTTP {response.status_code}) for {url}")
+    if response.status_code in BLOCK_STATUSES:
+        raise SourceBlockedError(f"HTTP {response.status_code} for {url}")
+
+
 def _retry_after_seconds(response: httpx.Response) -> float | None:
     value = response.headers.get("Retry-After")
     if value is None:
@@ -114,41 +137,49 @@ class PoliteHttpClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def get_text(self, url: str) -> str:
-        cached = self._cache.get(url)
+    async def get_text(self, url: str, cookies: dict[str, str] | None = None) -> str:
+        """GET a page. `cookies` carries site preferences (e.g. platform), never sessions."""
+        cookie_header = "; ".join(f"{key}={value}" for key, value in (cookies or {}).items())
+        cache_key = f"{url}|{cookie_header}"
+        cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
         if not await self._allowed(url):
             raise RobotsDisallowedError(f"robots.txt disallows {url}")
-        response = await self._request(url)
+        response = await self._request(url, {"Cookie": cookie_header} if cookie_header else None)
+        raise_if_blocked(response, url)
         if response.status_code == 404:
             raise PlayerNotFoundError(f"not found: {url}")
         if response.status_code >= 400:
             raise SourceError(f"HTTP {response.status_code} for {url}")
-        self._cache.set(url, response.text)
+        self._cache.set(cache_key, response.text)
         return response.text
 
-    async def get_json(self, url: str) -> Any:
+    async def get_json(self, url: str, cookies: dict[str, str] | None = None) -> Any:
         try:
-            return json.loads(await self.get_text(url))
+            return json.loads(await self.get_text(url, cookies))
         except json.JSONDecodeError as exc:
             raise SourceError(f"invalid JSON from {url}") from exc
 
-    async def _request(self, url: str) -> httpx.Response:
+    async def _request(self, url: str, headers: dict[str, str] | None = None) -> httpx.Response:
         """GET with rate limiting and retries. Returns the final response (any status)."""
         host = urlsplit(url).netloc
         attempt = 0
         while True:
             await self._limiter.wait(host)
             try:
-                response = await self._client.get(url)
+                response = await self._client.get(url, headers=headers)
             except httpx.TransportError as exc:
                 if attempt >= self.max_retries:
                     raise SourceError(f"request to {url} failed: {exc}") from exc
                 delay = self._backoff(attempt)
                 logger.warning("request to %s failed (%s), retrying in %.0fs", url, exc, delay)
             else:
-                if response.status_code not in RETRY_STATUSES or attempt >= self.max_retries:
+                if (
+                    response.status_code not in RETRY_STATUSES
+                    or attempt >= self.max_retries
+                    or is_challenge(response)
+                ):
                     return response
                 delay = max(self._backoff(attempt), _retry_after_seconds(response) or 0.0)
                 delay = min(delay, MAX_BACKOFF_S)
@@ -179,6 +210,7 @@ class PoliteHttpClient:
         except SourceError:
             lines = DENY_ALL
         else:
+            raise_if_blocked(response, f"{origin}/robots.txt")
             if response.status_code >= 500:
                 lines = DENY_ALL
             elif response.status_code >= 400:

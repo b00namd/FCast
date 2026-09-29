@@ -5,7 +5,7 @@ import contextlib
 import logging
 import signal
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -41,7 +41,12 @@ class Collector:
             if not self.sources:
                 logger.warning("no price sources configured (FCAST_SOURCES / FCAST_MANUAL_CSV)")
             self.last_result = await collect_once(
-                self.session_factory, self.sources, self.settings.platform, rotation=self._runs
+                self.session_factory,
+                self.sources,
+                self.settings.platform,
+                rotation=self._runs,
+                rotate=self.settings.source_strategy == "rotate",
+                pause=timedelta(hours=self.settings.source_pause_h),
             )
             self._runs += 1
             return self.last_result
@@ -56,7 +61,7 @@ class Collector:
         self.engine.dispose()
 
 
-def create_scheduler(collector: Collector, interval_min: int) -> Any:
+def create_scheduler(collector: Collector, interval_min: int, jitter_s: int = 0) -> Any:
     scheduler = AsyncIOScheduler(timezone=UTC)
     scheduler.add_job(
         collector.run_once,
@@ -67,6 +72,7 @@ def create_scheduler(collector: Collector, interval_min: int) -> Any:
         max_instances=1,
         coalesce=True,
         misfire_grace_time=300,
+        jitter=jitter_s or None,
     )
     return scheduler
 
@@ -81,7 +87,9 @@ async def run_forever(settings: Settings, stop: asyncio.Event | None = None) -> 
             loop.add_signal_handler(sig, stop.set)
 
     collector = Collector(settings)
-    scheduler = create_scheduler(collector, settings.collect_interval_min)
+    scheduler = create_scheduler(
+        collector, settings.collect_interval_min, settings.collect_jitter_s
+    )
     scheduler.start()
     logger.info("collector started, interval %d min", settings.collect_interval_min)
     try:

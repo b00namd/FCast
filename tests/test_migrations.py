@@ -20,6 +20,7 @@ EXPECTED_TABLES = {
     "promo_links",
     "alerts_log",
     "source_refs",
+    "source_status",
 }
 
 

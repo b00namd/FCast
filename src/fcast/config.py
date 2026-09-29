@@ -3,6 +3,7 @@
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator
@@ -37,8 +38,14 @@ class Settings(BaseSettings):
     # Manual price source: CSV file that is read on every collector run.
     manual_csv: Path | None = None
 
-    # Comma-separated web sources to query, e.g. "futbin". Empty disables web access.
-    sources: str = "futbin"
+    # Comma-separated web sources in priority order. Empty disables web access.
+    sources: str = "futbin,futnext"
+    # "priority": ask sources in the order above; "rotate": alternate per player and run.
+    source_strategy: Literal["priority", "rotate"] = "priority"
+    # How long a source is left alone after it answered 403/429 or a bot challenge.
+    source_pause_h: int = Field(default=24, ge=1, le=24 * 30)
+    # Random delay (seconds) added to each scheduled run so requests don't hit fixed times.
+    collect_jitter_s: int = Field(default=180, ge=0, le=1800)
 
     # Outgoing HTTP (only used by web sources whose terms allow automated access).
     http_contact: str | None = None
@@ -58,7 +65,7 @@ class Settings(BaseSettings):
     @field_validator("sources")
     @classmethod
     def _known_sources(cls, value: str) -> str:
-        known = {"futbin"}
+        known = {"futbin", "futnext"}
         names = [name.strip().lower() for name in value.split(",") if name.strip()]
         unknown = set(names) - known
         if unknown:

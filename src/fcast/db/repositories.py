@@ -22,6 +22,7 @@ from fcast.db.models import (
     Promo,
     PromoLink,
     SourceRef,
+    SourceStatus,
     WatchlistEntry,
 )
 
@@ -373,3 +374,59 @@ def last_alert(session: Session, rule: str, player: Player | None = None) -> Ale
     else:
         stmt = stmt.where(AlertLog.player_id == player.id)
     return session.scalar(stmt.order_by(AlertLog.sent_at.desc(), AlertLog.id.desc()).limit(1))
+
+
+# --- source status ---------------------------------------------------------
+
+
+def get_source_status(session: Session, source: str) -> SourceStatus:
+    """Status row for a source, created on first use."""
+    status = session.get(SourceStatus, source)
+    if status is None:
+        status = SourceStatus(source=source)
+        session.add(status)
+        session.flush()
+    return status
+
+
+def list_source_statuses(session: Session) -> Sequence[SourceStatus]:
+    return session.scalars(select(SourceStatus).order_by(SourceStatus.source)).all()
+
+
+def paused_sources(session: Session, now: datetime) -> set[str]:
+    return set(
+        session.scalars(select(SourceStatus.source).where(SourceStatus.paused_until > now)).all()
+    )
+
+
+def pause_source(session: Session, source: str, until: datetime, reason: str) -> SourceStatus:
+    status = get_source_status(session, source)
+    status.paused_until = until
+    status.pause_reason = reason[:500]
+    session.flush()
+    return status
+
+
+def resume_source(session: Session, source: str) -> SourceStatus:
+    status = get_source_status(session, source)
+    status.paused_until = None
+    status.pause_reason = None
+    session.flush()
+    return status
+
+
+def record_source_result(
+    session: Session,
+    source: str,
+    at: datetime,
+    success: bool,
+    error: str | None = None,
+) -> SourceStatus:
+    status = get_source_status(session, source)
+    if success:
+        status.last_success_at = at
+    if error is not None:
+        status.last_error_at = at
+        status.last_error = error[:500]
+    session.flush()
+    return status

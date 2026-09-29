@@ -5,6 +5,11 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 ## [Unreleased]
 
 ### Phase 2 – Preisquellen & Collector
+- **Nachtrag 2:** FUTNext als Ersatzquelle (PC-Preise über Einstellungs-Cookie, Plattform-Label
+  wird geprüft). Automatischer Rückzug: HTTP 403/429/Bot-Challenge → Quelle wird ohne weitere
+  Versuche für `FCAST_SOURCE_PAUSE_H` (24 h) pausiert, persistent in `source_status`.
+  `FCAST_SOURCE_STRATEGY` (`priority`/`rotate`), Start-Jitter `FCAST_COLLECT_JITTER_S`.
+  CLI: `fcast sources status`, `fcast sources resume <name>`.
 - **Nachtrag:** FUTBIN-Adapter (Preis Konsole/PC, Aktualisierungszeit, Spielerdaten aus der
   Spielerseite). Web-Quellen werden über `FCAST_SOURCES` aktiviert (Default `futbin`).
   Neue Tabelle `source_refs` für den FUTBIN-Link je Karte, CLI `fcast watch add … --futbin <url>`.
