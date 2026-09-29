@@ -1,0 +1,20 @@
+services:
+  fcast:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: fcast:latest
+    container_name: fcast
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      FCAST_DB_PATH: /data/fcast.db
+    volumes:
+      - fcast-data:/data
+    # Phase 0: the container prints its version and exits.
+    # From Phase 3 on it runs the web app + scheduler with `restart: unless-stopped`.
+    restart: "no"
+
+volumes:
+  fcast-data:
