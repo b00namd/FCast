@@ -562,3 +562,51 @@ def test_alerts_test_push_and_history(client: TestClient, collector: Collector) 
     page = client.get("/alerts").text
     assert "Kauf-Dip: P1" in page
     assert "Preis 1.000" in page
+
+
+@pytest.mark.parametrize(
+    ("text", "ea_id"),
+    [
+        ("231747", 231747),
+        (" 231747 ", 231747),
+        ("https://www.fut.gg/players/231747-kylian-mbappe/27-231747/", 231747),
+        ("https://www.fut.gg/players/231747-kylian-mbappe/27-50563395/", 50563395),
+        ("fut.gg/players/231747-kylian-mbappe/27-50563395", 50563395),
+        ("https://www.futnext.com/players/mbappe/231747", 231747),
+        ("https://www.futnext.com/de/players/mbappe/50563395?x=1", 50563395),
+    ],
+)
+def test_parse_ea_id_from_number_or_link(text: str, ea_id: int) -> None:
+    from fcast.web.forms import parse_ea_id
+
+    assert parse_ea_id(text) == ea_id
+
+
+@pytest.mark.parametrize(
+    ("text", "hint"),
+    [
+        ("https://www.futbin.com/27/player/21487/maradona", "FUTBIN-Link enthält keine EA-ID"),
+        ("abc", "FUT.GG"),
+        ("0", "FUT.GG"),
+        ("", "FUT.GG"),
+    ],
+)
+def test_parse_ea_id_errors(text: str, hint: str) -> None:
+    from fcast.web.forms import parse_ea_id
+
+    with pytest.raises(ValueError, match=hint):
+        parse_ea_id(text)
+
+
+def test_watchlist_add_with_futgg_link(client: TestClient, collector: Collector) -> None:
+    response = client.post(
+        "/watchlist",
+        data={
+            "ea_id": "https://www.fut.gg/players/231747-kylian-mbappe/27-50563395/",
+            "futbin_url": "https://www.futbin.com/27/player/99999/mbappe",
+        },
+        headers=HTMX,
+    )
+    assert "gespeichert" in response.text
+    with collector.session_factory() as session:
+        assert repo.get_source_ref(session, 50563395, "futbin") == "/27/player/99999/mbappe"

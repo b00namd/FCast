@@ -32,11 +32,28 @@ def parse_coins(text: str | None) -> int | None:
     return value
 
 
+# Card links that contain the EA card (resource) id.
+_EA_ID_LINKS = (
+    re.compile(r"fut\.gg/players/[^/]+/\d{2}-(\d+)"),  # .../players/231747-kylian-mbappe/27-231747/
+    re.compile(r"futnext\.com/(?:[a-z]{2}/)?players/[^/]+/(\d+)"),  # .../players/mbappe/231747
+)
+
+
 def parse_ea_id(text: str | None) -> int:
-    digits = (text or "").strip()
-    if not digits.isdigit() or int(digits) <= 0:
-        raise ValueError("EA-ID muss eine positive Zahl sein")
-    return int(digits)
+    """EA card id from a number or a FUT.GG/FUTNext card link."""
+    value = (text or "").strip()
+    if value.isdigit() and int(value) > 0:
+        return int(value)
+    for pattern in _EA_ID_LINKS:
+        match = pattern.search(value)
+        if match is not None and int(match[1]) > 0:
+            return int(match[1])
+    if "futbin.com" in value:
+        raise ValueError(
+            "Ein FUTBIN-Link enthält keine EA-ID. Bitte den FUT.GG-Link der Karte einfügen "
+            "(FUTBIN-Link gehört ins Feld darunter)."
+        )
+    raise ValueError("EA-ID: Zahl oder FUT.GG-/FUTNext-Link der Karte einfügen")
 
 
 def clean_text(text: str | None, max_length: int) -> str | None:

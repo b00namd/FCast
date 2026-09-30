@@ -7,8 +7,9 @@
     </div>
   {% endif %}
   <div class="grid">
-    <label>EA-ID
-      <input name="ea_id" inputmode="numeric" required placeholder="z. B. 231747" value="{{ form.ea_id or '' }}">
+    <label>EA-ID oder FUT.GG-Link
+      <input name="ea_id" required placeholder="231747 oder https://www.fut.gg/players/…" value="{{ form.ea_id or '' }}">
+      <small class="muted">Der FUT.GG-Link enthält die Karten-ID (auch für Sonderkarten).</small>
     </label>
     <label>Name <small class="muted">(optional)</small>
       <input name="name" placeholder="wird sonst automatisch ergänzt" value="{{ form.name or '' }}">
