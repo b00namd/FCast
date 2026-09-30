@@ -97,6 +97,9 @@ class Settings(BaseSettings):
     totw_league_factors: str = "bl1:1.0,bl2:0.6,bl3:0.35"
     # How many top candidates get their FC card looked up on FUTBIN per week.
     totw_card_lookups: int = Field(default=10, ge=0, le=30)
+    # The best linked candidates are priced in the candidate pool until a few days after the
+    # release, so the backtest can learn how TOTW candidates' cards react.
+    totw_pool_top: int = Field(default=5, ge=0, le=30)
 
     # --- Leak & promo radar ---
     # RSS feeds for the leak inbox as "name=url" pairs (robots.txt checked per feed).

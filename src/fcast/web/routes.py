@@ -4,10 +4,11 @@ import asyncio
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -16,6 +17,9 @@ from fcast.alerts.config import AlertConfig, load_alert_config, save_alert_confi
 from fcast.alerts.notifier import Notification, NotifierError
 from fcast.analysis import service as analysis
 from fcast.analysis import signals as sig
+from fcast.backtest import engine
+from fcast.backtest import service as bt
+from fcast.backtest.curves import OFFSETS_H
 from fcast.collector.job import apply_player_info
 from fcast.collector.service import JOB_ID, Collector
 from fcast.config import Platform, Settings, is_clock_time
@@ -657,6 +661,99 @@ async def totw_refresh(request: Request) -> Response:
         tasks.add(task)
         task.add_done_callback(tasks.discard)
     return RedirectResponse("/totw?started=1", status_code=303)
+
+
+# --- backtest ---------------------------------------------------------------------------
+
+BACKTEST_RULES = {
+    sig.Rule.BUY_DIP: "Kauf-Dip (BUY_DIP)",
+    sig.Rule.PROMO_PREBUY: "Promo-Vorkauf (PROMO_PREBUY)",
+}
+SWEEP_HINTS = {
+    sig.Rule.BUY_DIP: "dip_pct=5,10,15,20",
+    sig.Rule.PROMO_PREBUY: "entry_days=2,3,5,7",
+}
+
+
+def _form_day(value: str | None) -> date | None:
+    try:
+        return date.fromisoformat(value) if value else None
+    except ValueError:
+        return None
+
+
+@pages.get("/backtest", response_class=HTMLResponse)
+def backtest_page(
+    request: Request,
+    rule: str = sig.Rule.BUY_DIP.value,
+    first: Annotated[str | None, Query(alias="from")] = None,
+    last: Annotated[str | None, Query(alias="to")] = None,
+    sweep: str | None = None,
+    hold: str | None = None,
+) -> HTMLResponse:
+    settings = _settings(request)
+    now = utcnow()
+    errors: list[str] = []
+    selected = sig.Rule.BUY_DIP
+    try:
+        selected = sig.Rule(rule.upper())
+    except ValueError:
+        errors.append(f"Unbekannte Regel {rule}")
+    if selected not in engine.SUPPORTED:
+        errors.append(f"{selected} lässt sich (noch) nicht backtesten")
+        selected = sig.Rule.BUY_DIP
+    params = engine.Params.from_settings(settings)
+    if hold:
+        try:
+            params = replace(params, max_hold_h=max(1.0, float(hold.replace(",", "."))))
+        except ValueError:
+            errors.append("Haltedauer muss eine Zahl sein")
+    report = None
+    curves: list[Any] = []
+    try:
+        start, end = bt.window(_form_day(first), _form_day(last), settings.tz, now)
+        sweep_name, values = bt.parse_sweep(selected, sweep) if sweep else (None, [])
+    except ValueError as exc:
+        errors.append(str(exc))
+        start, end = bt.window(None, None, settings.tz, now)
+        sweep_name, values = None, []
+    with _db(request) as session:
+        report = bt.run_backtest(
+            session, settings, selected, start, end, params, sweep_name, values
+        )
+        curves = bt.promo_curves(session, settings, start, end) + bt.totw_curves(
+            session, settings, start, end
+        )
+    chart = [
+        {
+            "label": f"{c.label} · {c.group}",
+            "points": [[offset, value] for offset, (value, _) in c.average().items()],
+        }
+        for c in curves
+        if c.cards
+    ]
+    return _render(
+        request,
+        "backtest.html",
+        {
+            "nav": "backtest",
+            "rules": BACKTEST_RULES,
+            "selected": selected,
+            "form": {
+                "from": start.astimezone(settings.tz).date().isoformat(),
+                "to": end.astimezone(settings.tz).date().isoformat(),
+                "sweep": sweep or "",
+                "hold": hold or "",
+            },
+            "sweep_hint": SWEEP_HINTS[selected],
+            "sweepable": engine.SWEEPABLE[selected],
+            "report": report,
+            "curves": curves,
+            "offsets": OFFSETS_H,
+            "chart": chart,
+            "errors": errors,
+        },
+    )
 
 
 # --- leak & promo radar ------------------------------------------------------------

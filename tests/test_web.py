@@ -1002,3 +1002,72 @@ def test_player_page_shows_holo_version(client: TestClient, collector: Collector
     assert "/players/67356691" in page
     assert "+100,0 %" in page
     assert "Holo-ÜV" in page  # signal: normal card could be listed just below the holo
+
+
+def test_backtest_page_runs_rules_sweeps_and_curves(
+    client: TestClient, collector: Collector
+) -> None:
+    from fcast.db.models import TotwActual, TotwPrediction
+    from fcast.totw import calendar
+
+    platform = collector.settings.platform
+    now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    with collector.session_factory.begin() as session:
+        dip = repo.upsert_player(session, 1, repo.PlayerDetails(name="Dip", rating=85))
+        prices = [10_000] * 168 + [8_500] + [10_000] * 5
+        for hour, price in enumerate(prices):
+            at = now - timedelta(hours=len(prices) - hour)
+            repo.add_snapshot(session, dip, platform, price, "futbin", at)
+
+    page = client.get("/backtest")
+    assert page.status_code == 200
+    assert "Kauf-Dip (BUY_DIP)" in page.text
+    assert "905" in page.text  # one dip, sold at the 7-day mean
+    assert "Fingerprint" in page.text
+
+    swept = client.get("/backtest", params={"sweep": "dip_pct=10,20"})
+    assert "Sweep: dip_pct" in swept.text
+    bad = client.get("/backtest", params={"sweep": "threshold=1"})
+    assert bad.status_code == 200
+    assert "gibt es für BUY_DIP nicht" in bad.text
+    assert "Keine Trades" in client.get("/backtest", params={"rule": "PROMO_PREBUY"}).text
+
+    # TOTW 1: the predicted candidate's card rose 20 % after the release.
+    settings = collector.settings
+    release = calendar.release_at(
+        settings.totw_first_release,
+        calendar.parse_release_time(settings.totw_release_time),
+        settings.tz,
+        1,
+    )
+    with collector.session_factory.begin() as session:
+        olise = repo.upsert_player(session, 247827, repo.PlayerDetails(name="Michael Olise"))
+        for hour in range(-80, 60):
+            price = 10_000 if hour < 0 else 12_000
+            repo.add_snapshot(
+                session, olise, platform, price, "futbin", release + timedelta(hours=hour)
+            )
+        session.add(
+            TotwPrediction(
+                week=1,
+                key="bl1:1",
+                rank=1,
+                name="M. Olise",
+                team="FC Bayern München",
+                league="bl1",
+                score=15.0,
+                goals=3,
+                reasons="3 Tore",
+                ea_id=247827,
+            )
+        )
+        session.add(TotwActual(week=1, futbin_id=22947, slug="michael-olise", name="Olise"))
+    day = release.astimezone(settings.tz).date()
+    curves = client.get(
+        "/backtest",
+        params={"from": str(day - timedelta(days=5)), "to": str(day + timedelta(days=5))},
+    )
+    assert "TOTW 1" in curves.text
+    assert "im TOTW" in curves.text
+    assert "+20,0 %" in curves.text
+    assert "curve-data" in curves.text

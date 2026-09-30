@@ -4,6 +4,23 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Phase 8 – Backtesting & Lernen aus Promos
+- **Engine** (`fcast.backtest`): spielt `BUY_DIP` und `PROMO_PREBUY` auf den gespeicherten Preisen
+  nach – ohne Blick in die Zukunft, Kauf zum Snapshot-Preis, Verkauf am Ziel (Ø 7 Tage), nach
+  Haltedauer/Stop-Loss bzw. zum Promo-Ausstieg eine Stufe unter Markt, 5 % Steuer.
+- **Kennzahlen:** Trefferquote, Profit gesamt und pro Trade, Max-Drawdown, Kapitalbindung (Spitze),
+  Ø Haltedauer, offene Positionen zum Marktwert.
+- **Parameter-Sweep** (`dip_pct`, `min_margin_pct`, `max_hold_h`, `stop_loss_pct`, `threshold`,
+  `entry_days`, `exit_h`), bester Wert markiert.
+- **Promo- und TOTW-Verläufe:** Ø Preisänderung der verknüpften Karten bzw. der TOTW-Kandidaten
+  (getrennt nach „im TOTW“/„nicht im TOTW“) von T-3 bis T+2 Tage.
+- Die besten 5 verknüpften TOTW-Kandidaten werden bis 3 Tage nach dem Release im Pool bepreist
+  (`FCAST_TOTW_POOL_TOP`), damit Verläufe entstehen.
+- **Reproduzierbar:** Fingerprint über alle Eingangsdaten; gleiche Daten → gleiches Ergebnis.
+- CLI `fcast backtest --rule … --from … --to … [--sweep dip_pct=5,10,15] [--hold 48] [--curves]`,
+  Dashboard-Seite **Backtest** mit Diagramm der Verläufe.
+- Standardabweichung wird mit Gleitkomma statt `statistics.pstdev` berechnet (Backtest ~2× schneller).
+
 ### Phase 7 – Holo-Paare (TOTW-Prognose siehe unten)
 - Recherche zu Holo-/Pristine-Karten in `docs/holo.md`; Fixture der Olise-TOTW-Holo-Seite.
 - FUTBIN: Versionsliste und Holo-Erkennung (`parse_versions`, `is_holo_page`); Holo-EA-ID = normale

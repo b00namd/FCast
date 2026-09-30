@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Backtest{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>Backtest</h2>
+  <p class="muted">Signale auf den gespeicherten Preisen nachspielen – wie viel hätte eine Regel gebracht?</p>
+</hgroup>
+
+{% if errors %}
+  <div class="message error" role="alert">{% for e in errors %}<div>{{ e }}</div>{% endfor %}</div>
+{% endif %}
+
+<form method="get" action="/backtest" class="form-card">
+  <div class="grid">
+    <label>Regel
+      <select name="rule">
+        {% for value, label in rules.items() %}
+          <option value="{{ value.value }}" {% if value == selected %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Von <input type="date" name="from" value="{{ form.from }}"></label>
+    <label>Bis <input type="date" name="to" value="{{ form.to }}"></label>
+  </div>
+  <div class="grid">
+    <label>Parameter-Sweep <small class="muted">(optional)</small>
+      <input type="text" name="sweep" value="{{ form.sweep }}" placeholder="{{ sweep_hint }}">
+      <small class="hint">Möglich: {{ sweepable | join(", ") }}</small>
+    </label>
+    {% if selected.value == "BUY_DIP" %}
+    <label>Max. Haltedauer (h) <small class="muted">(Standard {{ report.params.max_hold_h | int }})</small>
+      <input type="text" name="hold" value="{{ form.hold }}" inputmode="decimal" placeholder="{{ report.params.max_hold_h | int }}">
+    </label>
+    {% endif %}
+  </div>
+  <div class="form-actions"><button type="submit">Auswerten</button></div>
+</form>
+
+{% set m = report.metrics %}
+<p class="muted"><small>
+  {{ report.start | dt("%d.%m.%Y") }} – {{ report.end | dt("%d.%m.%Y %H:%M") }}
+  · {{ report.cards }} Karten · {{ report.snapshots | coins }} Preise
+  {% if selected.value == "PROMO_PREBUY" %}· {{ report.promos }} Promos{% endif %}
+  · Fingerprint <code>{{ report.fingerprint }}</code> (gleiche Daten → gleicher Fingerprint → gleiches Ergebnis)
+</small></p>
+
+<div class="stats">
+  <article><div class="label">Trades</div><div class="value">{{ m.trades }}</div>
+    <small class="muted">{{ m.open }} offen</small></article>
+  <article><div class="label">Trefferquote</div><div class="value">{% if m.hit_rate is not none %}{{ "%.0f" | format(m.hit_rate) }} %{% else %}–{% endif %}</div>
+    <small class="muted">{{ m.wins }} mit Gewinn</small></article>
+  <article><div class="label">Profit gesamt</div><div class="value {% if m.total_profit > 0 %}up{% elif m.total_profit < 0 %}down{% endif %}">{{ m.total_profit | coins }}</div>
+    <small class="muted">nach 5 % Steuer</small></article>
+  <article><div class="label">Ø Profit / Trade</div><div class="value">{% if m.avg_profit is not none %}{{ m.avg_profit | round | int | coins }}{% else %}–{% endif %}</div></article>
+  <article><div class="label">Max-Drawdown</div><div class="value">{{ m.max_drawdown | coins }}</div></article>
+  <article><div class="label">Kapitalbindung</div><div class="value">{{ m.peak_capital | coins }}</div>
+    <small class="muted">Spitze gleichzeitig</small></article>
+  <article><div class="label">Ø Haltedauer</div><div class="value">{% if m.avg_hold_h is not none %}{{ "%.1f" | format(m.avg_hold_h) | replace(".", ",") }} h{% else %}–{% endif %}</div></article>
+  {% if m.open %}
+  <article><div class="label">Offen (unrealisiert)</div><div class="value {% if m.unrealized < 0 %}down{% else %}up{% endif %}">{{ m.unrealized | coins }}</div></article>
+  {% endif %}
+</div>
+
+{% if report.sweep %}
+<h3>Sweep: {{ report.sweep_name }}</h3>
+<div class="overflow-auto">
+<table>
+  <thead><tr>
+    <th class="num">Wert</th><th class="num">Trades</th><th class="num">Treffer</th><th class="num">Profit</th>
+    <th class="num">Ø Profit</th><th class="num hide-sm">Drawdown</th><th class="num hide-sm">Kapital</th>
+  </tr></thead>
+  <tbody>
+  {% for row in report.sweep %}{% set r = row.metrics %}
+    <tr {% if report.best_sweep and row.value == report.best_sweep.value %}class="hit"{% endif %}>
+      <td class="num">{{ "%g" | format(row.value) | replace(".", ",") }}{% if report.best_sweep and row.value == report.best_sweep.value %} ★{% endif %}</td>
+      <td class="num">{{ r.trades }}{% if r.open %} <small class="muted">+{{ r.open }}</small>{% endif %}</td>
+      <td class="num">{% if r.hit_rate is not none %}{{ "%.0f" | format(r.hit_rate) }} %{% else %}–{% endif %}</td>
+      <td class="num {% if r.total_profit > 0 %}up{% elif r.total_profit < 0 %}down{% endif %}">{{ r.total_profit | coins }}</td>
+      <td class="num">{% if r.avg_profit is not none %}{{ r.avg_profit | round | int | coins }}{% else %}–{% endif %}</td>
+      <td class="num hide-sm">{{ r.max_drawdown | coins }}</td>
+      <td class="num hide-sm">{{ r.peak_capital | coins }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h3>Trades</h3>
+{% if not report.trades %}
+  <p class="muted">Keine Trades im Zeitraum.
+  {% if report.snapshots == 0 %}Es gibt noch keine Preise im Zeitraum.
+  {% elif selected.value == "BUY_DIP" %}Kauf-Dips brauchen mindestens eine Woche Preisverlauf pro Karte.
+  {% else %}Es braucht Promos mit Startdatum im Zeitraum und verknüpfte Karten mit Preisen.{% endif %}</p>
+{% else %}
+<div class="overflow-auto">
+<table>
+  <thead><tr>
+    <th>Karte</th><th>Kauf</th><th class="num">Preis</th><th>Verkauf</th><th class="num">Preis</th>
+    <th class="num">Profit</th><th class="num hide-sm">Rendite</th><th>Grund</th>
+  </tr></thead>
+  <tbody>
+  {% for t in report.trades[:100] %}
+    <tr>
+      <td><a href="/players/{{ t.ea_id }}">{{ t.name }}</a></td>
+      <td class="nowrap">{{ t.bought_at | dt }}</td>
+      <td class="num">{{ t.buy | coins }}</td>
+      <td class="nowrap">{{ t.sold_at | dt }}</td>
+      <td class="num">{{ t.sell | coins }}</td>
+      <td class="num {% if t.profit > 0 %}up{% elif t.profit < 0 %}down{% endif %}">{{ t.profit | coins }}</td>
+      <td class="num hide-sm">{{ t.return_pct | pct }}</td>
+      <td><span class="badge {% if t.open %}warn{% elif t.profit > 0 %}good{% else %}bad{% endif %}">{{ t.exit }}</span>
+        {% if t.note %}<small class="muted">{{ t.note }}</small>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if report.trades | length > 100 %}<p class="muted"><small>Die ersten 100 von {{ report.trades | length }} Trades.</small></p>{% endif %}
+{% endif %}
+
+<h3>Promo- und TOTW-Verläufe</h3>
+<p class="muted"><small>Ø Preisänderung der betroffenen Karten gegenüber drei Tagen vor dem Ereignis (Promo-Start bzw. TOTW-Release).
+TOTW: die bestplatzierten Kandidaten der Prognose, getrennt nach „im TOTW“ und „nicht im TOTW“.</small></p>
+{% if not curves %}
+  <p class="muted">Noch keine Ereignisse mit Preisdaten im Zeitraum. FCast beobachtet dafür die Karten aus Promo-Leaks und die Top-TOTW-Kandidaten automatisch.</p>
+{% else %}
+  {% if chart %}
+  <div class="chart-box small"><canvas id="curve-chart" aria-label="Preisreaktion um Ereignisse"></canvas></div>
+  <script type="application/json" id="curve-data">{{ chart | tojson }}</script>
+  {% endif %}
+  <div class="overflow-auto">
+  <table>
+    <thead><tr>
+      <th>Ereignis</th><th>Gruppe</th><th class="num">Karten</th>
+      {% for o in offsets %}<th class="num">T{{ "%+d" | format(o // 24) }} Tg</th>{% endfor %}
+    </tr></thead>
+    <tbody>
+    {% for c in curves %}{% set avg = c.average() %}
+      <tr>
+        <td><strong>{{ c.label }}</strong><br><small class="muted">{{ c.at | dt("%a, %d.%m. %H:%M") }}</small></td>
+        <td>{{ c.group }}</td>
+        <td class="num">{{ c.cards | length }}</td>
+        {% for o in offsets %}
+          <td class="num">{% if o in avg %}<span class="{% if avg[o][0] > 0 %}up{% elif avg[o][0] < 0 %}down{% endif %}">{{ avg[o][0] | pct }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% endif %}
+
+<details>
+  <summary>Annahmen</summary>
+  <ul>
+    <li>Signale sehen nur Preise bis zu ihrem Zeitpunkt – kein Blick in die Zukunft.</li>
+    <li>Kauf zum Snapshot-Preis (günstigstes Angebot). Danach wird zum Ziel eingestellt (Kauf-Dip: Ø 7 Tage); verkauft, sobald der Marktpreis das Ziel erreicht.</li>
+    <li>Nach der Haltedauer, beim Stop-Loss oder zum Promo-Ausstieg: Verkauf eine Preisstufe unter dem Marktpreis.</li>
+    <li>5 % EA-Steuer auf jeden Verkauf. Eine Position pro Karte gleichzeitig. Offene Positionen werden zum letzten Preis bewertet.</li>
+    <li>ÜV-Chance und Holo-ÜV lassen sich nicht backtesten: Ob eine überteuerte Karte verkauft wurde, sieht FCast nicht.</li>
+  </ul>
+</details>
+{% endblock %}
+
+{% block scripts %}
+{% if chart %}
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/backtest-chart.js"></script>
+{% endif %}
+{% endblock %}

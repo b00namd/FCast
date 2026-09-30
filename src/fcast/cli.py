@@ -4,7 +4,7 @@ import asyncio
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -464,6 +464,154 @@ def signals(
             "-" if s.score is None else f"{s.score:.0f}",
         )
     console.print(table)
+
+
+def _pct(value: float | None) -> str:
+    return "-" if value is None else f"{value:+.1f} %".replace(".", ",")
+
+
+def _day(value: str | None, option: str) -> date | None:
+    if value is None:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise typer.BadParameter("expected YYYY-MM-DD", param_hint=option) from exc
+
+
+@app.command()
+def backtest(
+    rule: Annotated[str, typer.Option("--rule", help="BUY_DIP or PROMO_PREBUY.")] = "BUY_DIP",
+    first: Annotated[
+        str | None, typer.Option("--from", help="First day (YYYY-MM-DD); default 30 days ago.")
+    ] = None,
+    last: Annotated[
+        str | None, typer.Option("--to", help="Last day (YYYY-MM-DD); default today.")
+    ] = None,
+    sweep: Annotated[
+        str | None,
+        typer.Option("--sweep", help="Parameter sweep, e.g. dip_pct=5,10,15,20."),
+    ] = None,
+    hold: Annotated[
+        float | None, typer.Option("--hold", help="BUY_DIP: max holding time in hours.", min=1)
+    ] = None,
+    card: Annotated[
+        list[int] | None, typer.Option("--card", help="Only this EA id (repeatable).")
+    ] = None,
+    curves: Annotated[
+        bool, typer.Option("--curves", help="Also show price reactions to promos and TOTW.")
+    ] = False,
+    trades: Annotated[int, typer.Option("--trades", help="How many trades to list.")] = 15,
+) -> None:
+    """Replay a rule on the stored prices: trades, hit rate, profit, drawdown, capital."""
+    from dataclasses import replace
+
+    from fcast.analysis.signals import Rule
+    from fcast.backtest import engine
+    from fcast.backtest import service as bt
+    from fcast.db.base import utcnow
+
+    settings = get_settings()
+    try:
+        selected = Rule(rule.upper())
+    except ValueError as exc:
+        raise typer.BadParameter(f"unknown rule {rule}", param_hint="--rule") from exc
+    if selected not in engine.SUPPORTED:
+        raise typer.BadParameter(
+            f"{selected} cannot be backtested (supported: {', '.join(engine.SUPPORTED)})",
+            param_hint="--rule",
+        )
+    try:
+        start, end = bt.window(_day(first, "--from"), _day(last, "--to"), settings.tz, utcnow())
+        sweep_name, values = bt.parse_sweep(selected, sweep) if sweep else (None, [])
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    params = engine.Params.from_settings(settings)
+    if hold is not None:
+        params = replace(params, max_hold_h=hold)
+
+    with _db_session() as session:
+        report = bt.run_backtest(
+            session, settings, selected, start, end, params, sweep_name, values, card
+        )
+        event_curves = (
+            bt.promo_curves(session, settings, start, end)
+            + bt.totw_curves(session, settings, start, end)
+            if curves
+            else []
+        )
+
+    m = report.metrics
+    tz = settings.tz
+    console.print(
+        f"[bold]Backtest {selected}[/bold] {start.astimezone(tz):%d.%m.%Y} - "
+        f"{end.astimezone(tz):%d.%m.%Y %H:%M} · {report.cards} Karten, "
+        f"{report.snapshots} Preise"
+        + (f", {report.promos} Promos" if selected is Rule.PROMO_PREBUY else "")
+        + f" · Fingerprint {report.fingerprint}"
+    )
+    summary = Table(show_header=False)
+    summary.add_column()
+    summary.add_column(justify="right")
+    for label, value in (
+        ("Trades (abgeschlossen)", str(m.trades)),
+        ("offen", f"{m.open} ({format_coins(m.unrealized)} unrealisiert)"),
+        ("Trefferquote", "-" if m.hit_rate is None else f"{m.hit_rate:.0f} %"),
+        ("Profit gesamt", format_coins(m.total_profit)),
+        ("Ø Profit pro Trade", format_coins(None if m.avg_profit is None else round(m.avg_profit))),
+        ("Max-Drawdown", format_coins(m.max_drawdown)),
+        ("Kapitalbindung (Spitze)", format_coins(m.peak_capital)),
+        ("Ø Haltedauer", "-" if m.avg_hold_h is None else f"{m.avg_hold_h:.1f} h"),
+    ):
+        summary.add_row(label, value)
+    console.print(summary)
+
+    if report.trades:
+        table = Table(title="Trades")
+        for column in ("Karte", "Kauf", "Preis", "Verkauf", "Preis", "Profit", "Rendite", "Grund"):
+            table.add_column(column)
+        for t in report.trades[:trades]:
+            table.add_row(
+                t.name,
+                f"{t.bought_at.astimezone(tz):%d.%m. %H:%M}",
+                format_coins(t.buy),
+                f"{t.sold_at.astimezone(tz):%d.%m. %H:%M}",
+                format_coins(t.sell),
+                format_coins(t.profit),
+                _pct(t.return_pct),
+                f"{t.exit}" + (f" · {t.note}" if t.note else ""),
+            )
+        console.print(table)
+
+    if report.sweep:
+        table = Table(title=f"Sweep {report.sweep_name}")
+        for column in ("Wert", "Trades", "Treffer", "Profit", "Ø Profit", "Drawdown", "Kapital"):
+            table.add_column(column, justify="right")
+        for row in report.sweep:
+            r = row.metrics
+            table.add_row(
+                f"{row.value:g}",
+                str(r.trades),
+                "-" if r.hit_rate is None else f"{r.hit_rate:.0f} %",
+                format_coins(r.total_profit),
+                format_coins(None if r.avg_profit is None else round(r.avg_profit)),
+                format_coins(r.max_drawdown),
+                format_coins(r.peak_capital),
+            )
+        console.print(table)
+
+    if curves:
+        if not event_curves:
+            typer.echo("Keine Promo- oder TOTW-Verläufe im Zeitraum.")
+        for ec in event_curves:
+            avg = ec.average()
+            line = "  ".join(
+                f"T{offset:+d}h {_pct(value)} ({n})" for offset, (value, n) in avg.items()
+            )
+            console.print(
+                f"[bold]{ec.label}[/bold] ({ec.group}, {ec.at.astimezone(tz):%d.%m. %H:%M}, "
+                f"{len(ec.cards)} Karten): {line or 'keine Preise'}"
+            )
 
 
 alert_app = typer.Typer(help="Push alerts.", no_args_is_help=True)

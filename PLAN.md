@@ -102,7 +102,12 @@ Einstellungen, Verlauf und Test-Push; CLI `fcast alert test|check`.
 
 ---
 
-## Phase 8 – Backtesting & Lernen aus Promos
+## ✅ Phase 8 – Backtesting & Lernen aus Promos (erledigt)
+> **Stand 30.09.2026:** Engine für `BUY_DIP` und `PROMO_PREBUY`, Promo- und TOTW-Verläufe, Sweep,
+> CLI `fcast backtest` und Seite „Backtest“. ÜV-Chance und Holo-ÜV sind nicht backtestbar (ob eine
+> überteuerte Karte verkauft wurde, ist in den Preisdaten nicht zu sehen). Aussagekräftig wird es
+> erst mit einigen Wochen Daten; die Top-5-TOTW-Kandidaten werden dafür jetzt mitbepreist.
+
 **Aufgaben**
 - Engine, die Signale auf historischen Snapshots simuliert (Kauf zum Snapshot-Preis, Verkauf nach
   Regel oder Haltedauer, Steuer einrechnen)

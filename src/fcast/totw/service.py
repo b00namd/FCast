@@ -3,7 +3,7 @@
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -12,7 +12,7 @@ from fcast.alerts.notifier import Notification, Notifier, NotifierError, Priorit
 from fcast.config import Settings
 from fcast.db import repositories as repo
 from fcast.db.base import utcnow
-from fcast.db.models import ExternalCard, RealMatch, TotwActual, TotwPrediction
+from fcast.db.models import ExternalCard, PoolCard, RealMatch, TotwActual, TotwPrediction
 from fcast.db.session import session_scope
 from fcast.sources.base import SourceBlockedError, SourceError
 from fcast.sources.futbin import (
@@ -36,6 +36,7 @@ PAGES_PER_CARD = 4  # FUTBIN pages checked per candidate at most
 CARD_RECHECK = timedelta(days=14)  # retry cards that were not found
 ALERT_BEFORE = timedelta(hours=20)  # alert window before the release
 ALERT_TOP = 5
+POOL_AFTER_RELEASE = timedelta(days=3)  # keep pricing candidates this long after the release
 FUTBIN = "futbin"
 
 
@@ -107,8 +108,7 @@ class TotwService:
         self.futbin = futbin
         self.notifier = notifier
         self.weights = TotwWeights.from_settings(settings)
-        hours, minutes = settings.totw_release_time.split(":")
-        self.release_time = time(int(hours), int(minutes))
+        self.release_time = calendar.parse_release_time(settings.totw_release_time)
 
     # --- calendar ------------------------------------------------------------
 
@@ -299,6 +299,31 @@ class TotwService:
             )
         return True
 
+    def _track_candidates(
+        self,
+        session: Session,
+        week: calendar.TotwWeek,
+        candidates: list[Candidate],
+        cards: dict[str, ExternalCard | None],
+    ) -> None:
+        """Price the best candidates' cards in the pool until a few days after the release."""
+        until = week.release + POOL_AFTER_RELEASE
+        tracked = 0
+        for candidate in candidates:
+            card = cards.get(candidate.key)
+            if tracked >= self.settings.totw_pool_top:
+                break
+            if card is None or card.ea_id is None or card.futbin_ref is None:
+                continue
+            tracked += 1
+            player = repo.upsert_player(session, card.ea_id)
+            repo.set_source_ref(session, player, FUTBIN, card.futbin_ref)
+            pool = session.get(PoolCard, player.id) or PoolCard(player_id=player.id)
+            if pool.promo_id is None:  # promo pool entries keep their promo
+                pool.reason = f"TOTW {week.number} Kandidat"
+            pool.until = max(pool.until, until) if pool.until else until
+            session.add(pool)
+
     # --- the whole run -----------------------------------------------------------
 
     async def refresh(self, now: datetime | None = None) -> TotwReport:
@@ -351,6 +376,8 @@ class TotwService:
                         chem_styles_raw=chems,
                     )
                 )
+
+            self._track_candidates(session, week, candidates, cards)
 
         released = self.last_released(now)
         if released is not None and not futbin_paused:

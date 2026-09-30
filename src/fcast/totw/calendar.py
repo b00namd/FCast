@@ -21,6 +21,12 @@ class TotwWeek:
         return self.release
 
 
+def parse_release_time(value: str) -> time:
+    """ "19:00" -> time(19, 0) (validated in the settings)."""
+    hours, minutes = value.split(":")
+    return time(int(hours), int(minutes))
+
+
 def release_at(first_release: date, release_time: time, tz: tzinfo, number: int) -> datetime:
     local_day = first_release + WEEK * (number - 1)
     return datetime.combine(local_day, release_time, tzinfo=tz).astimezone(UTC)

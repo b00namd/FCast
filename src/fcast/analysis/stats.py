@@ -4,6 +4,7 @@ Series may have gaps (collector downtime, source pauses); all figures only use t
 that exist. Figures that need more data than available are None instead of misleading values.
 """
 
+import math
 import statistics
 from collections import defaultdict
 from collections.abc import Sequence
@@ -33,13 +34,15 @@ def window_stats(points: Sequence[Point], since: datetime) -> WindowStats | None
     prices = [price for at, price in points if at >= since]
     if not prices:
         return None
+    mean = statistics.fmean(prices)
     return WindowStats(
         count=len(prices),
-        mean=statistics.fmean(prices),
+        mean=mean,
         median=statistics.median(prices),
         low=min(prices),
         high=max(prices),
-        stdev=statistics.pstdev(prices),
+        # Float arithmetic; statistics.pstdev is exact but far too slow for backtests.
+        stdev=math.sqrt(statistics.fmean([(p - mean) ** 2 for p in prices])),
     )
 
 

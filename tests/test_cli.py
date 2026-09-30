@@ -276,3 +276,33 @@ def test_promo_add_and_list(db_path: Path) -> None:
     assert (
         runner.invoke(app, ["promo", "add", "X", "--start", "bad", "--league", "L"]).exit_code != 0
     )
+
+
+def test_backtest_command(db_path: Path) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from fcast.db import repositories as repo
+    from fcast.db.session import create_db_engine, create_session_factory
+
+    assert runner.invoke(app, ["db", "upgrade"]).exit_code == 0
+    engine = create_db_engine(get_settings().db_url)
+    start = datetime(2026, 9, 1, tzinfo=UTC)
+    with create_session_factory(engine).begin() as session:
+        player = repo.upsert_player(session, 1, repo.PlayerDetails(name="Dip", rating=85))
+        prices = [10_000] * 168 + [8_500] + [10_000] * 5
+        for hour, price in enumerate(prices):
+            at = start + timedelta(hours=hour)
+            repo.add_snapshot(session, player, get_settings().platform, price, "futbin", at)
+    engine.dispose()
+
+    args = ["backtest", "--from", "2026-09-01", "--to", "2026-09-20", "--sweep", "dip_pct=10,20"]
+    result = runner.invoke(app, args)
+    assert result.exit_code == 0, result.output
+    assert "Backtest BUY_DIP" in result.output
+    assert "905" in result.output  # profit of the one dip trade
+    assert "Sweep dip_pct" in result.output
+
+    result = runner.invoke(app, ["backtest", "--rule", "HOLO_SPREAD"])
+    assert result.exit_code != 0
+    result = runner.invoke(app, ["backtest", "--sweep", "threshold=1,2"])
+    assert result.exit_code != 0

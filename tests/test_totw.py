@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from fcast.alerts.notifier import Notification, Notifier
 from fcast.config import Platform, Settings
 from fcast.db.base import Base
-from fcast.db.models import TotwActual, TotwPrediction
+from fcast.db.models import Player, PoolCard, TotwActual, TotwPrediction
 from fcast.db.session import create_db_engine, create_session_factory
 from fcast.sources.futbin import FutbinSource
 from fcast.sources.http import PoliteHttpClient
@@ -271,6 +271,13 @@ async def test_refresh_predicts_links_cards_and_evaluates(factory: sessionmaker[
         assert top.chem_styles[0] == ("Hunter", 77)
         kane = next(p for p in predictions if p.name == "H. Kane")
         assert kane.futbin_ref is None  # club on the page does not match -> no card
+        # The linked candidate is priced in the pool until 3 days after the release.
+        olise = session.scalar(select(Player).where(Player.ea_id == 50579475))
+        assert olise is not None
+        pool = session.get(PoolCard, olise.id)
+        assert pool is not None
+        assert pool.reason == "TOTW 2 Kandidat"
+        assert pool.until == service.upcoming(tuesday).release + timedelta(days=3)
 
     # Alert window (20 h before release): top candidates were sent once.
     assert len(notifier.sent) == 1
