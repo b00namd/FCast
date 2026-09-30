@@ -296,3 +296,25 @@ def test_alert_log_survives_player_deletion(session: Session) -> None:
     session.commit()
     session.expire_all()
     assert session.scalars(select(AlertLog)).one().player_id is None
+
+
+def test_deleting_a_watched_player_removes_dependent_rows(session: Session) -> None:
+    from fcast.db.models import MarketState, SourceRef
+
+    player = repo.upsert_player(session, 1, repo.PlayerDetails(name="Demo"))
+    repo.set_watch(session, player, target_buy=1_000)
+    repo.set_source_ref(session, player, "futbin", "/27/player/1/demo")
+    repo.add_snapshot(session, player, Platform.PC, 1_000, "futbin", T0)
+    repo.record_market_state(session, player, Platform.PC, "futbin", T0, (1_000,), 150, 5_000)
+    repo.log_alert(session, "BUY_DIP", "msg", player)
+    session.commit()
+
+    session.delete(player)
+    session.commit()
+
+    assert repo.get_player_by_ea_id(session, 1) is None
+    assert session.scalars(select(WatchlistEntry)).all() == []
+    assert session.scalars(select(PriceSnapshot)).all() == []
+    assert session.scalars(select(SourceRef)).all() == []
+    assert session.scalars(select(MarketState)).all() == []
+    assert session.scalars(select(AlertLog)).one().player_id is None  # history is kept

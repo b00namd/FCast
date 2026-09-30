@@ -39,7 +39,9 @@ class Player(Base):
     club: Mapped[str | None] = mapped_column(String(100))
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
-    watchlist_entry: Mapped["WatchlistEntry | None"] = relationship(back_populates="player")
+    watchlist_entry: Mapped["WatchlistEntry | None"] = relationship(
+        back_populates="player", cascade="all, delete-orphan", passive_deletes=True
+    )
 
     @property
     def display_name(self) -> str:
