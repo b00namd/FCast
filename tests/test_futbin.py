@@ -176,3 +176,28 @@ async def test_source_unknown_page() -> None:
 
 def test_source_is_remote() -> None:
     assert FutbinSource.remote is True
+
+
+@pytest.mark.parametrize(
+    ("page", "styles"),
+    [
+        ("maradona", (("Hunter", 60), ("Hawk", 40), ("Basic", 0))),
+        ("muller", (("Engine", 50), ("Guardian", 50), ("Basic", 0))),
+    ],
+)
+def test_community_chem_styles(page: str, styles: tuple[tuple[str, int], ...]) -> None:
+    from fcast.sources.futbin import format_chem_styles, parse_community_chem_styles
+
+    parsed = parse_community_chem_styles(PAGES[page])
+    assert parsed == styles
+    info = parse_player(PAGES[page], 1, Platform.PC)
+    assert info.chem_style == styles[0][0]
+    assert info.chem_styles == format_chem_styles(styles)
+
+
+def test_chem_styles_fallback_to_bio_sentence() -> None:
+    from fcast.sources.futbin import parse_usage
+
+    html = MARADONA.replace("community-chem-styles", "something-else")
+    assert parse_usage(html, Platform.PC).chem_style == "Basic"  # PC sentence in the bio
+    assert parse_usage(html, Platform.PC).chem_styles == ()

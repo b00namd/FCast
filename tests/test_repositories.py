@@ -318,3 +318,11 @@ def test_deleting_a_watched_player_removes_dependent_rows(session: Session) -> N
     assert session.scalars(select(SourceRef)).all() == []
     assert session.scalars(select(MarketState)).all() == []
     assert session.scalars(select(AlertLog)).one().player_id is None  # history is kept
+
+
+def test_player_chem_styles_property(session: Session) -> None:
+    player = repo.upsert_player(
+        session, 1, repo.PlayerDetails(chem_styles_raw="Hunter:77|Artist:8|Engine:8")
+    )
+    assert player.chem_styles == [("Hunter", 77), ("Artist", 8), ("Engine", 8)]
+    assert repo.upsert_player(session, 2).chem_styles == []

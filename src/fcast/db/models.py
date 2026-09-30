@@ -39,6 +39,8 @@ class Player(Base):
     club: Mapped[str | None] = mapped_column(String(100))
     # FUTBIN usage data for the configured platform: recommended chem style and games played
     chem_style: Mapped[str | None] = mapped_column(String(32))
+    # Top 3 community chem styles with share: "Hunter:77|Artist:8|Engine:8"
+    chem_styles_raw: Mapped[str | None] = mapped_column("chem_styles", String(120))
     games_used: Mapped[int | None]
     goals_per_game: Mapped[float | None]
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
@@ -46,6 +48,15 @@ class Player(Base):
     watchlist_entry: Mapped["WatchlistEntry | None"] = relationship(
         back_populates="player", cascade="all, delete-orphan", passive_deletes=True
     )
+
+    @property
+    def chem_styles(self) -> list[tuple[str, int]]:
+        styles = []
+        for item in (self.chem_styles_raw or "").split("|"):
+            name, _, share = item.rpartition(":")
+            if name and share.isdigit():
+                styles.append((name, int(share)))
+        return styles
 
     @property
     def display_name(self) -> str:

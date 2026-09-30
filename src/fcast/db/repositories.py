@@ -57,6 +57,7 @@ class PlayerDetails:
     nation: str | None = None
     club: str | None = None
     chem_style: str | None = None
+    chem_styles_raw: str | None = None
     games_used: int | None = None
     goals_per_game: float | None = None
 

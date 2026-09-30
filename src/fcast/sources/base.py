@@ -70,6 +70,7 @@ class PlayerInfo:
     club: str | None = None
     # Usage data for the configured platform (FUTBIN only)
     chem_style: str | None = None
+    chem_styles: str | None = None  # top 3 as "Hunter:77|Artist:8|Engine:8"
     games_used: int | None = None
     goals_per_game: float | None = None
 

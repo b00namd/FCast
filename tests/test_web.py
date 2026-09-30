@@ -676,7 +676,8 @@ def test_watchlist_add_with_only_futbin_link_for_special_card(
         assert player.card_type == "Team of the Week"
         assert repo.get_source_ref(session, 50579475, "futbin") == "/27/player/22947/michael-olise"
     page = client.get("/players/50579475").text
-    assert "Hunter" in page
+    assert "Hunter 77 % · Artist 8 % · Engine 8 %" in page
+    assert "Hunter 77 %" in client.get("/watchlist").text
     assert "535" in page
 
 
@@ -731,7 +732,8 @@ def test_edit_row_checks_new_futbin_link(client: TestClient, collector: Collecto
     with collector.session_factory() as session:
         player = repo.get_player_by_ea_id(session, 190042)
         assert player is not None
-        assert player.chem_style == "Basic"  # PC recommendation from the page
+        assert player.chem_style == "Hunter"  # most popular with the community
+        assert player.chem_styles == [("Hunter", 60), ("Hawk", 40), ("Basic", 0)]
 
 
 def test_futbin_link_is_found_in_background(client: TestClient, collector: Collector) -> None:

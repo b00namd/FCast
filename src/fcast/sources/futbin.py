@@ -42,6 +42,7 @@ _CARD_TYPE_RE = re.compile(r"\bFC \d{2} (.+?) - ")
 _CARD_IMAGE_RE = re.compile(r"img/players/(p?)(\d+)\.png")
 _GAMES_RE = re.compile(r"used in ([\d,.]+) games with a GPG \(goals per game\) of (\d+(?:\.\d+)?)")
 _CHEM_RE = re.compile(r"best chemistry style for him is ([A-Za-z][A-Za-z ]*?)\.")
+_COMMUNITY_CHEM_RE = re.compile(r"([A-Za-z][A-Za-z ]*?)\s*(\d{1,3})\s*%")
 _POSITION_CLASS_RE = re.compile(r"^playercard-\d+-position$")
 _PLATFORM_CLASSES = {Platform.CONSOLE: "platform-ps-only", Platform.PC: "platform-pc-only"}
 _UNITS = {"sec": "seconds", "min": "minutes", "hour": "hours", "day": "days", "week": "weeks"}
@@ -145,9 +146,32 @@ def parse_card_id(html: str) -> int | None:
 
 @dataclass(frozen=True)
 class Usage:
-    chem_style: str | None = None
+    chem_style: str | None = None  # most popular
+    chem_styles: tuple[tuple[str, int], ...] = ()  # top 3 with share in percent
     games_used: int | None = None
     goals_per_game: float | None = None
+
+
+def format_chem_styles(styles: tuple[tuple[str, int], ...]) -> str | None:
+    """Storage format: "Hunter:77|Artist:8|Engine:8"."""
+    return "|".join(f"{name}:{share}" for name, share in styles) or None
+
+
+def parse_community_chem_styles(html: str) -> tuple[tuple[str, int], ...]:
+    """FUTBIN's three most popular chem styles with their share, e.g. (("Hunter", 77), …).
+
+    The block is the same for all platforms (a second copy is the phone layout).
+    """
+    tree = HTMLParser(html)
+    box = tree.css_first("div.community-chem-styles")
+    if box is None:
+        return ()
+    styles: list[tuple[str, int]] = []
+    for button in box.css(".community-chem-style"):
+        match = _COMMUNITY_CHEM_RE.fullmatch(re.sub(r"\s+", " ", button.text(strip=True)))
+        if match is not None:
+            styles.append((match[1].strip(), int(match[2])))
+    return tuple(styles)
 
 
 def parse_usage(html: str, platform: Platform) -> Usage:
@@ -160,8 +184,12 @@ def parse_usage(html: str, platform: Platform) -> Usage:
     text = re.sub(r"\s+", " ", text)
     chem = _CHEM_RE.search(text)
     games = _GAMES_RE.search(text)
+    community = parse_community_chem_styles(html)
+    # Prefer what the community actually uses; the bio sentence is only a fallback.
+    top = community[0][0] if community else (chem[1].strip() if chem else None)
     return Usage(
-        chem_style=chem[1].strip() if chem else None,
+        chem_style=top,
+        chem_styles=community,
         games_used=_parse_coins(games[1]) if games else None,
         goals_per_game=float(games[2]) if games else None,
     )
@@ -192,6 +220,7 @@ def parse_player(html: str, ea_id: int, platform: Platform | None = None) -> Pla
     return PlayerInfo(
         ea_id=ea_id,
         chem_style=usage.chem_style,
+        chem_styles=format_chem_styles(usage.chem_styles),
         games_used=usage.games_used,
         goals_per_game=usage.goals_per_game,
         name=title.split(" - ", 1)[0].strip(),

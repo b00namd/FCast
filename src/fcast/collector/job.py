@@ -65,6 +65,7 @@ def apply_player_info(session: Session, info: PlayerInfo) -> Player:
             nation=info.nation,
             club=info.club,
             chem_style=info.chem_style,
+            chem_styles_raw=info.chem_styles,
             games_used=info.games_used,
             goals_per_game=info.goals_per_game,
         ),

@@ -1,0 +1,3 @@
+{% macro chem_list(player) -%}
+{%- for name, share in player.chem_styles %}{% if not loop.first %} · {% endif %}{{ name }} {{ share }} %{% endfor -%}
+{%- endmacro %}

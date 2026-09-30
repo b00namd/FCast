@@ -15,7 +15,10 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   Basiskarten). Alternativ akzeptiert das Feld eine Zahl oder einen FUT.GG-/FUTNext-Link.
   Passen EA-ID und FUTBIN-Link nicht zur selben Karte, gibt es einen Fehler. Ist FUTBIN
   pausiert, wird nicht nachgefragt.
-- **Chemstyle & Nutzung:** Empfohlener Chemstyle, gespielte Spiele und Tore/Spiel laut FUTBIN
+- **Chemstyles:** die drei beliebtesten Chemstyles der FUTBIN-Community mit Anteil (z. B.
+  „Hunter 77 % · Artist 8 % · Engine 8 %“), plattformunabhängig; Anzeige in Übersicht, Watchlist
+  und Spielerdetail. Der Satz „best chemistry style“ aus dem Profiltext dient nur noch als Fallback.
+- **Nutzung:** gespielte Spiele und Tore/Spiel laut FUTBIN
   für die eingestellte Plattform (neue Spalten in `players`). Aktualisierung bei jedem Lauf
   aus der bereits geladenen Seite (keine zusätzlichen Anfragen). Anzeige in Watchlist und
   Spielerdetail.
