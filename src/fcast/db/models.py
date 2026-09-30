@@ -3,11 +3,21 @@
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from fcast.config import Platform
 from fcast.db.base import Base, UTCDateTime, str_enum, utcnow
+
+
+def parse_chem_styles(raw: str | None) -> list[tuple[str, int]]:
+    """ "Hunter:77|Artist:8" -> [("Hunter", 77), ("Artist", 8)]."""
+    styles = []
+    for item in (raw or "").split("|"):
+        name, _, share = item.rpartition(":")
+        if name and share.isdigit():
+            styles.append((name, int(share)))
+    return styles
 
 
 class PositionStatus(StrEnum):
@@ -51,12 +61,7 @@ class Player(Base):
 
     @property
     def chem_styles(self) -> list[tuple[str, int]]:
-        styles = []
-        for item in (self.chem_styles_raw or "").split("|"):
-            name, _, share = item.rpartition(":")
-            if name and share.isdigit():
-                styles.append((name, int(share)))
-        return styles
+        return parse_chem_styles(self.chem_styles_raw)
 
     @property
     def display_name(self) -> str:
@@ -221,3 +226,78 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(String(500))
+
+
+class RealMatch(Base):
+    """A real-life match (e.g. from OpenLigaDB) with its goals as JSON."""
+
+    __tablename__ = "real_matches"
+    __table_args__ = (
+        Index("ix_real_matches_kickoff", "kickoff"),
+        UniqueConstraint("source", "ext_id", name="uq_real_matches_source_ext_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(32))
+    ext_id: Mapped[int]
+    league: Mapped[str] = mapped_column(String(16))
+    season: Mapped[int]
+    matchday: Mapped[int]
+    kickoff: Mapped[datetime] = mapped_column(UTCDateTime)
+    home_id: Mapped[int]
+    home: Mapped[str] = mapped_column(String(100))
+    away_id: Mapped[int]
+    away: Mapped[str] = mapped_column(String(100))
+    finished: Mapped[bool]
+    home_goals: Mapped[int | None]
+    away_goals: Mapped[int | None]
+    goals_json: Mapped[str] = mapped_column(default="[]")
+
+
+class ExternalCard(Base):
+    """Cache: which FC card belongs to a real-life player (looked up once on FUTBIN)."""
+
+    __tablename__ = "external_cards"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)  # e.g. "bl1:18331"
+    futbin_ref: Mapped[str | None] = mapped_column(String(200))
+    ea_id: Mapped[int | None]
+    checked_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class TotwPrediction(Base):
+    __tablename__ = "totw_predictions"
+
+    week: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    rank: Mapped[int]
+    name: Mapped[str] = mapped_column(String(100))
+    team: Mapped[str] = mapped_column(String(100))
+    league: Mapped[str] = mapped_column(String(16))
+    score: Mapped[float]
+    goals: Mapped[int]
+    reasons: Mapped[str] = mapped_column(String(200))
+    ea_id: Mapped[int | None]
+    futbin_ref: Mapped[str | None] = mapped_column(String(200))
+    card_name: Mapped[str | None] = mapped_column(String(100))
+    price: Mapped[int | None]
+    chem_styles_raw: Mapped[str | None] = mapped_column(String(120))
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+    # Same interface as Player for the chem chips in templates.
+    chem_style = None
+
+    @property
+    def chem_styles(self) -> list[tuple[str, int]]:
+        return parse_chem_styles(self.chem_styles_raw)
+
+
+class TotwActual(Base):
+    """Players of a released TOTW (from FUTBIN), for the hit rate."""
+
+    __tablename__ = "totw_actuals"
+
+    week: Mapped[int] = mapped_column(primary_key=True)
+    futbin_id: Mapped[int] = mapped_column(primary_key=True)
+    slug: Mapped[str] = mapped_column(String(120))
+    name: Mapped[str] = mapped_column(String(120))

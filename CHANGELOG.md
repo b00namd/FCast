@@ -4,6 +4,24 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### TOTW-Prognose (Teil von Phase 7, vorgezogen)
+- **Daten:** OpenLigaDB (offen, ohne Schlüssel) für 1., 2. und 3. Liga – Spiele, Ergebnis, Tore mit
+  Torschütze, Elfmeter, Eigentor. Gespeichert in `real_matches`. API-Football geprüft: kostenloser
+  Tarif nur Saisons 2022–2024, aktuelle Saison erst mit Pro (ca. 19 $/Monat); Reddit-API braucht
+  seit 2026 eine Freigabe. Beides später anschließbar.
+- **TOTW-Wochen:** Release mittwochs 19:00 (konfigurierbar), Fenster = Spiele seit dem letzten
+  Release; Nummerierung wie bei FUTBIN.
+- **Score:** Tore (Elfer schwächer), Doppelpack/Hattrick-Bonus, Sieg, Liga-Faktor; Gewichte in der
+  Config (`FCAST_TOTW_*`). Begründung pro Kandidat („3 Tore · Hattrick · Sieg“).
+- **FC-Karte:** Für die Top-Kandidaten sucht FCast über die FUTBIN-Sitemap die Basiskarte (Name +
+  Verein müssen passen), zeigt Preis und Chemstyles; Zuordnung wird zwischengespeichert.
+- **Auswertung:** Nach dem Release liest FCast das echte TOTW von FUTBIN (`/27/totw/TOTWn`,
+  Tabelle `totw_actuals`) und zeigt die Trefferquote der Top 10.
+- **Dashboard:** neue Seite **TOTW** (Kandidaten, Preise, „Beobachten“, Rückblick), Aktualisierung
+  alle 6 h und per Button. **Alert** mit den Top 5 einmal pro Woche bis 20 h vor dem Release
+  (abschaltbar unter Alerts).
+- Test mit echten Daten: Für TOTW 2 lag Olise (Hattrick) auf Platz 1 und war im TOTW.
+
 ### Nach Phase 5 – Watchlist-Komfort & Chemstyle
 - **FUTBIN-Link wird automatisch gesucht**, wenn nur EA-ID oder FUT.GG-Link bekannt ist: FCast liest
   FUTBINs Spieler-Sitemaps (einmal täglich, 3 Dateien), wählt Kandidaten über den Namen (Slug) und

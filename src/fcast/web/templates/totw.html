@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% from "macros.html" import chem_list %}
+{% block title %}TOTW-Prognose{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>TOTW {{ week.number }} – Prognose</h2>
+  <p class="muted">
+    Release {{ week.release | dt("%a, %d.%m. %H:%M") }}{% if hours_left %} · in {{ hours_left }} h{% endif %}
+    · Spiele seit {{ week.window_start | dt("%d.%m. %H:%M") }}
+  </p>
+</hgroup>
+
+<div class="form-actions">
+  <form method="post" action="/totw/refresh" style="margin:0">
+    <button type="submit" {% if running %}disabled aria-busy="true"{% endif %}>{% if running %}Wird aktualisiert …{% else %}Jetzt aktualisieren{% endif %}</button>
+  </form>
+  {% if report %}<small class="muted">Letzte Aktualisierung: {{ report.matches }} Spiele, {{ report.candidates }} Kandidaten, {{ report.linked }} FC-Karten{% if report.errors %} · <span class="down">{{ report.errors | length }} Fehler</span>{% endif %}</small>{% endif %}
+</div>
+
+<p class="muted"><small>
+  Datenbasis: OpenLigaDB (1., 2. und 3. Liga) – Tore, Elfmeter und Ergebnis. Vorlagen und Spielnoten fehlen noch;
+  starke Verteidiger, Torhüter und Vorlagengeber werden daher unterschätzt. Später erweiterbar (API-Football Pro, Reddit).
+</small></p>
+
+{% if not predictions %}
+  <p class="muted">Noch keine Kandidaten für diese Woche – entweder wurden noch keine Spiele gespielt oder die Daten wurden noch nicht geladen („Jetzt aktualisieren“).</p>
+{% else %}
+<div class="overflow-auto">
+<table>
+  <thead>
+    <tr>
+      <th class="num">#</th>
+      <th>Spieler</th>
+      <th>Leistung</th>
+      <th class="num hide-sm">Score</th>
+      <th>FC-Karte</th>
+      <th class="num">Preis</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for p in predictions %}
+    <tr>
+      <td class="num muted">{{ p.rank }}</td>
+      <td><strong>{{ p.name }}</strong><br><small class="muted">{{ p.team }} · {{ league_names.get(p.league, p.league) }}</small></td>
+      <td>{{ p.reasons }}</td>
+      <td class="num hide-sm">{{ "%.1f" | format(p.score) | replace(".", ",") }}</td>
+      <td>
+        {% if p.futbin_ref %}
+          <a href="https://www.futbin.com{{ p.futbin_ref }}" target="_blank" rel="noreferrer">{{ p.card_name or "FUTBIN" }}</a>
+          {% if p.chem_styles %}<br>{{ chem_list(p) }}{% endif %}
+        {% else %}<span class="muted">–</span>{% endif %}
+      </td>
+      <td class="num">{{ p.price | coins }}</td>
+      <td class="actions">
+        {% if p.futbin_ref %}
+        <form method="post" action="/watchlist" style="margin:0">
+          <input type="hidden" name="ea_id" value="{{ p.ea_id or '' }}">
+          <input type="hidden" name="futbin_url" value="https://www.futbin.com{{ p.futbin_ref }}">
+          <input type="hidden" name="note" value="TOTW {{ week.number }} Kandidat">
+          <button type="submit" class="secondary outline">Beobachten</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if previous %}
+<h3>Rückblick TOTW {{ previous.week.number }}</h3>
+{% if previous.rate %}
+  {% set hits, total, names = previous.rate %}
+  <p><strong>{{ hits }} von {{ total }}</strong> der Top-Kandidaten waren im TOTW{% if names %}: {{ names | join(", ") }}{% endif %}.</p>
+{% else %}
+  <p class="muted">Noch nicht ausgewertet (FCast liest das echte TOTW nach dem Release bei FUTBIN aus).</p>
+{% endif %}
+{% if previous.actual %}
+  <p class="muted"><small>Echtes TOTW {{ previous.week.number }}: {{ previous.actual | map(attribute="name") | join(", ") }}</small></p>
+{% endif %}
+{% endif %}
+{% endblock %}

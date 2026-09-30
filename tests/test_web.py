@@ -782,3 +782,80 @@ def test_chem_groups() -> None:
     assert chem_group("Hunter") == "pace"
     assert chem_group("GK Basic") == "keeper"
     assert chem_group("Unbekannt") == "other"
+
+
+# --- TOTW page ----------------------------------------------------------------------
+
+
+def test_totw_page_shows_candidates_and_review(client: TestClient, collector: Collector) -> None:
+    from fcast.db.models import TotwActual, TotwPrediction
+
+    now = datetime.now(UTC)
+    week = collector.totw.upcoming(now)
+    released = collector.totw.last_released(now)
+    with collector.session_factory.begin() as session:
+        session.add(
+            TotwPrediction(
+                week=week.number,
+                key="bl1:1",
+                rank=1,
+                name="M. Olise",
+                team="FC Bayern München",
+                league="bl1",
+                score=15.0,
+                goals=3,
+                reasons="3 Tore · Hattrick · Sieg",
+                ea_id=247827,
+                futbin_ref="/27/player/62/michael-olise",
+                card_name="Michael Olise (90)",
+                price=245_000,
+                chem_styles_raw="Hunter:77",
+            )
+        )
+        if released is not None:
+            session.add(
+                TotwPrediction(
+                    week=released.number,
+                    key="bl1:1",
+                    rank=1,
+                    name="M. Olise",
+                    team="FCB",
+                    league="bl1",
+                    score=1,
+                    goals=1,
+                    reasons="",
+                    ea_id=None,
+                    futbin_ref=None,
+                    card_name=None,
+                    price=None,
+                    chem_styles_raw=None,
+                )
+            )
+            session.add(
+                TotwActual(
+                    week=released.number, futbin_id=1, slug="michael-olise", name="Michael Olise"
+                )
+            )
+    page = client.get("/totw").text
+    assert f"TOTW {week.number}" in page
+    assert "M. Olise" in page
+    assert "3 Tore · Hattrick · Sieg" in page
+    assert "245.000" in page
+    assert "Hunter <b>77%</b>" in page
+    assert 'name="futbin_url" value="https://www.futbin.com/27/player/62/michael-olise"' in page
+    if released is not None:
+        assert "1 von 1" in page
+
+
+def test_totw_refresh_runs_in_background(client: TestClient, collector: Collector) -> None:
+    calls: list[int] = []
+
+    async def fake_refresh() -> None:
+        calls.append(1)
+
+    collector.refresh_totw = fake_refresh  # type: ignore[method-assign]
+    response = client.post("/totw/refresh", follow_redirects=False)
+    assert response.status_code == 303
+    client.get("/health", auth=None)  # let the event loop run the task
+    assert calls == [1]
+    assert "Noch keine Kandidaten" in client.get("/totw").text

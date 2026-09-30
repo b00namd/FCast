@@ -64,3 +64,15 @@ Erst danach wird der jeweilige Adapter gebaut – mit den Auflagen als Konfigura
 ## Aktuell aktive Quelle
 
 `ManualSource` (CSV, `FCAST_MANUAL_CSV`) – siehe Modul-Docstring in `src/fcast/sources/manual.py`.
+
+## Spieldaten für die TOTW-Prognose (Stand 30.09.2026)
+
+| Quelle | Status | Grund |
+|---|---|---|
+| OpenLigaDB | ✅ eingebaut | Offene Community-API ohne Schlüssel, aktuelle Saison, Tore mit Torschütze. Keine Vorlagen/Noten. |
+| API-Football | ⏸ vorbereitet | Konto vorhanden (Schlüssel in `.env` auf dem Server). Free-Tarif nur Saisons 2022–2024; Pro ca. 19 $/Monat. |
+| Reddit (TOTW-Prognosen der Community) | ⏸ Freigabe nötig | Seit 2026 „Responsible Builder Policy“: jeder API-Zugang braucht eine Genehmigung (2–4 Wochen). Ohne Login 403. |
+| football-data.org | ❌ | Free-Tarif ohne Torschützen. |
+| FotMob | ❌ | robots.txt sperrt `/api/*`. |
+| SofaScore, ESPN, Kicker | ❌ | Blocken automatisierte Abrufe (403). |
+| Understat | ❌ | robots.txt sperrt alles. |

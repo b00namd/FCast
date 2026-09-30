@@ -19,11 +19,15 @@ from fcast.db.base import utcnow
 from fcast.db.session import create_db_engine, create_session_factory, session_scope
 from fcast.sources.base import PriceSource, SourceBlockedError
 from fcast.sources.futbin import FutbinSource
-from fcast.sources.registry import build_sources
+from fcast.sources.registry import build_sources, make_http_client
+from fcast.totw.openligadb import OpenLigaDbClient
+from fcast.totw.service import TotwReport, TotwService
 
 logger = logging.getLogger(__name__)
 
 JOB_ID = "collect"
+TOTW_JOB_ID = "totw"
+TOTW_INTERVAL_H = 6
 FUTBIN = "futbin"
 DISCOVERY_PER_RUN = 3
 DISCOVERY_RETRY = timedelta(days=1)
@@ -57,6 +61,14 @@ class Collector:
         )
         self.last_result: CollectResult | None = None
         self._runs = 0
+        self.totw = TotwService(
+            settings,
+            self.session_factory,
+            OpenLigaDbClient(make_http_client(settings)),
+            self._futbin(),
+            self.alerts.notifier,
+        )
+        self.last_totw: TotwReport | None = None
         self._lock = asyncio.Lock()
 
     @property
@@ -163,10 +175,20 @@ class Collector:
         with self.session_factory() as session:
             return repo.get_source_ref(session, ea_id, source)
 
+    async def refresh_totw(self) -> TotwReport | None:
+        """Update the TOTW prediction; never raises (runs from the scheduler)."""
+        self.totw.futbin = self._futbin()  # sources may be added after construction (tests)
+        try:
+            self.last_totw = await self.totw.refresh()
+        except Exception:
+            logger.exception("TOTW refresh failed")
+        return self.last_totw
+
     async def aclose(self) -> None:
         for source in self.sources:
             await source.aclose()
         await self.alerts.aclose()
+        await self.totw.openligadb.aclose()
         self.engine.dispose()
 
 
@@ -181,6 +203,17 @@ def create_scheduler(collector: Collector, interval_min: int, jitter_s: int = 0)
         max_instances=1,
         coalesce=True,
         misfire_grace_time=300,
+        jitter=jitter_s or None,
+    )
+    scheduler.add_job(
+        collector.refresh_totw,
+        "interval",
+        hours=TOTW_INTERVAL_H,
+        id=TOTW_JOB_ID,
+        next_run_time=datetime.now(UTC) + timedelta(minutes=2),
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
         jitter=jitter_s or None,
     )
     return scheduler

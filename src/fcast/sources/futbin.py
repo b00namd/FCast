@@ -274,13 +274,20 @@ class FutbinSource(PriceSource):
             raise FutbinFormatError("no card image found, cannot determine the EA id")
         return parse_player(html, ea_id, self._platform)
 
-    async def discover(self, ea_id: int, hints: Sequence[str]) -> tuple[str, PlayerInfo] | None:
-        """Find the FUTBIN page of a card by name hints; returns (path, details)."""
+    def locator(self) -> "FutbinLocator":
         from fcast.sources.futbin_locator import FutbinLocator
 
         if self._locator is None:
             self._locator = FutbinLocator(self._client)
-        path = await self._locator.find(ea_id, hints)
+        return self._locator
+
+    async def get_page(self, path: str) -> str:
+        """Any FUTBIN page by path (robots.txt, rate limit and cache still apply)."""
+        return await self._client.get_text(BASE_URL + path)
+
+    async def discover(self, ea_id: int, hints: Sequence[str]) -> tuple[str, PlayerInfo] | None:
+        """Find the FUTBIN page of a card by name hints; returns (path, details)."""
+        path = await self.locator().find(ea_id, hints)
         if path is None:
             return None
         html = await self._client.get_text(BASE_URL + path)  # cached by the lookup

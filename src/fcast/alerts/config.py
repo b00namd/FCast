@@ -27,6 +27,7 @@ class AlertConfig:
     sell_target: bool = True
     overprice: bool = True
     system: bool = True  # source paused, collection failed
+    totw: bool = True  # TOTW candidates before the weekly release
 
     @classmethod
     def defaults(cls, settings: Settings) -> "AlertConfig":

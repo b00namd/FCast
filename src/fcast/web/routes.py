@@ -8,7 +8,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from fcast.alerts.config import AlertConfig, load_alert_config, save_alert_config
@@ -20,12 +20,14 @@ from fcast.collector.service import JOB_ID, Collector
 from fcast.config import Platform, Settings, is_clock_time
 from fcast.db import repositories as repo
 from fcast.db.base import utcnow
-from fcast.db.models import Player
+from fcast.db.models import Player, TotwActual, TotwPrediction
 from fcast.db.session import session_scope
 from fcast.sources import futbin
 from fcast.sources.base import PlayerInfo, PlayerNotFoundError, SourceError
 from fcast.sources.futbin_locator import name_hints_from_futgg
 from fcast.sources.registry import make_http_client
+from fcast.totw.openligadb import LEAGUE_NAMES
+from fcast.totw.service import hit_rate
 from fcast.web import forms, views
 
 logger = logging.getLogger(__name__)
@@ -545,6 +547,7 @@ def alerts_save(
     sell_target: OptionalFormStr = None,
     overprice: OptionalFormStr = None,
     system: OptionalFormStr = None,
+    totw: OptionalFormStr = None,
 ) -> HTMLResponse:
     errors: list[str] = []
     try:
@@ -574,6 +577,7 @@ def alerts_save(
         sell_target=sell_target is not None,
         overprice=overprice is not None,
         system=system is not None,
+        totw=totw is not None,
     )
     with _db(request) as session:
         save_alert_config(session, config)
@@ -595,3 +599,55 @@ async def alerts_test(request: Request) -> HTMLResponse:
     except NotifierError as exc:
         message, errors = None, [f"Senden fehlgeschlagen: {exc}"]
     return _render(request, "alerts.html", _alerts_context(request, message=message, errors=errors))
+
+
+# --- TOTW prediction -----------------------------------------------------------
+
+
+def _totw_context(request: Request, **extra: Any) -> dict[str, Any]:
+    collector = _collector(request)
+    service = collector.totw
+    now = utcnow()
+    week = service.upcoming(now)
+    released = service.last_released(now)
+    with _db(request) as session:
+        predictions = list(
+            session.scalars(
+                select(TotwPrediction)
+                .where(TotwPrediction.week == week.number)
+                .order_by(TotwPrediction.rank)
+            )
+        )
+        previous = None
+        if released is not None:
+            rate = hit_rate(session, released.number)
+            actual = list(
+                session.scalars(select(TotwActual).where(TotwActual.week == released.number))
+            )
+            previous = {"week": released, "rate": rate, "actual": actual}
+    tasks: set[asyncio.Task[Any]] = request.app.state.background_tasks
+    return {
+        "week": week,
+        "hours_left": max(0, int((week.release - now).total_seconds() // 3600)),
+        "predictions": predictions,
+        "previous": previous,
+        "report": collector.last_totw,
+        "running": any(not t.done() and t.get_name() == "totw" for t in tasks),
+        "league_names": LEAGUE_NAMES,
+        "nav": "totw",
+    } | extra
+
+
+@pages.get("/totw", response_class=HTMLResponse)
+def totw_page(request: Request) -> HTMLResponse:
+    return _render(request, "totw.html", _totw_context(request))
+
+
+@pages.post("/totw/refresh", response_model=None)
+async def totw_refresh(request: Request) -> Response:
+    tasks: set[asyncio.Task[Any]] = request.app.state.background_tasks
+    if not any(not t.done() and t.get_name() == "totw" for t in tasks):
+        task = asyncio.create_task(_collector(request).refresh_totw(), name="totw")
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+    return RedirectResponse("/totw?started=1", status_code=303)

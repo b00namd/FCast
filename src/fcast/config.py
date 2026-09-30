@@ -1,6 +1,7 @@
 """Application settings, loaded from environment variables and an optional `.env` file."""
 
 import re
+from datetime import date
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -82,6 +83,21 @@ class Settings(BaseSettings):
     # Suggested markup over the last known price for extinct cards.
     uev_extinct_markup_pct: float = Field(default=20.0, ge=0)
 
+    # --- TOTW prediction ---
+    # OpenLigaDB league shortcuts to follow (bl1 = Bundesliga, bl2, bl3).
+    totw_leagues: str = "bl1,bl2,bl3"
+    # First TOTW release (local date) and weekly release time; FUTBIN numbers weeks the same.
+    totw_first_release: date = date(2026, 9, 16)
+    totw_release_time: str = "19:00"
+    totw_weight_goal: float = Field(default=3.0, ge=0)
+    totw_weight_penalty_goal: float = Field(default=2.0, ge=0)
+    totw_weight_brace: float = Field(default=2.0, ge=0)
+    totw_weight_hattrick: float = Field(default=3.0, ge=0)
+    totw_weight_win: float = Field(default=1.0, ge=0)
+    totw_league_factors: str = "bl1:1.0,bl2:0.6,bl3:0.35"
+    # How many top candidates get their FC card looked up on FUTBIN per week.
+    totw_card_lookups: int = Field(default=10, ge=0, le=30)
+
     # Web dashboard (Basic Auth). The dashboard refuses to start without a password.
     web_user: str = "fcast"
     web_password: SecretStr | None = None
@@ -103,7 +119,7 @@ class Settings(BaseSettings):
             raise ValueError(f"unknown timezone: {value}") from exc
         return value
 
-    @field_validator("quiet_hours_start", "quiet_hours_end")
+    @field_validator("quiet_hours_start", "quiet_hours_end", "totw_release_time")
     @classmethod
     def _valid_clock_time(cls, value: str) -> str:
         if not is_clock_time(value):
