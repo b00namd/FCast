@@ -25,12 +25,85 @@
     <div class="value">{{ d.entry.target_buy | coins if d.entry else "–" }} / {{ d.entry.target_sell | coins if d.entry else "–" }}</div></article>
 </div>
 
+{% if a.signals %}
+<article>
+  <header><strong>Signale</strong></header>
+  {% for s in a.signals %}
+    <p>
+      <span class="badge {% if s.rule.value == 'BUY_DIP' %}warn{% elif s.rule.value == 'OVERPRICE_CHANCE' %}bad{% else %}good{% endif %}">{{ s.label }}</span>
+      {% if s.rule.value == 'BUY_DIP' %}Kaufen bis max. <strong>{{ s.recommended | coins }}</strong>
+      {% else %}Einstellen zu <strong>{{ s.recommended | coins }}</strong>{% endif %}
+      {% if s.expected_profit is not none %} · erwarteter Profit {{ s.expected_profit | coins }}{% endif %}
+      <br><small class="muted">{{ s.reasons | join(" · ") }}</small>
+    </p>
+  {% endfor %}
+</article>
+{% endif %}
+
+<h3>Analyse</h3>
+<div class="grid">
+  <div class="overflow-auto">
+  <table>
+    <thead><tr><th></th><th class="num">24 h</th><th class="num">7 Tage</th></tr></thead>
+    <tbody>
+      {% for label, attr in [("Ø", "mean"), ("Median", "median"), ("Min", "low"), ("Max", "high"), ("Std.-Abw.", "stdev")] %}
+      <tr><td>{{ label }}</td>
+        <td class="num">{{ (a.stats.day[attr] | round | int) | coins if a.stats.day else "–" }}</td>
+        <td class="num">{{ (a.stats.week[attr] | round | int) | coins if a.stats.week else "–" }}</td></tr>
+      {% endfor %}
+      <tr><td>Datenpunkte</td><td class="num">{{ a.stats.day.count if a.stats.day else 0 }}</td><td class="num">{{ a.stats.week.count if a.stats.week else 0 }}</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div>
+    <table>
+      <tbody>
+        <tr><td>Änderung 24 h</td><td class="num">{{ a.stats.change_24h_pct | pct }}</td></tr>
+        <tr><td>Abweichung zu Ø 7 Tage</td><td class="num">{{ a.stats.deviation_pct | pct }}</td></tr>
+        <tr><td>Volatilität</td><td class="num">{% if a.stats.volatility_pct is not none %}{{ "%.1f" | format(a.stats.volatility_pct) | replace(".", ",") }} %{% else %}–{% endif %}</td></tr>
+        <tr><td>Preisänderungen / Tag</td><td class="num">{% if a.stats.changes_per_day is not none %}{{ "%.1f" | format(a.stats.changes_per_day) | replace(".", ",") }}{% else %}–{% endif %}</td></tr>
+        <tr><td>ÜV-Score</td><td class="num">{% if a.overprice %}<strong>{{ a.overprice.score | round | int }}</strong> / 100{% else %}–{% endif %}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h3>Angebotslage</h3>
+{% if a.market %}
+  <p>
+    {% if a.extinct %}
+      <span class="badge bad">extinct</span> Keine Angebote seit {{ a.market.extinct_since | dt }}.
+    {% else %}
+      Günstigste Angebote:
+      {% for price in a.market.listings %}<span class="badge {% if a.outlier == price %}warn{% endif %}" {% if a.outlier == price %}title="Ausreißer, wird nicht als Marktpreis gewertet"{% endif %}>{{ price | coins }}</span> {% endfor %}
+      {% if a.outlier %}<br><small class="muted">{{ a.outlier | coins }} liegt weit unter dem nächsten Angebot und gilt als Ausreißer; Marktpreis {{ a.effective_price | coins }}.</small>{% endif %}
+    {% endif %}
+    <br><small class="muted">
+      EA-Preisspanne {{ a.market.range_min | coins }} – {{ a.market.range_max | coins }}
+      {% if a.headroom_pct is not none %} · Luft bis Maximum {{ "%.0f" | format(a.headroom_pct) }} %{% endif %}
+      · Stand {{ a.market.observed_at | dt }} ({{ a.market.source }})
+    </small>
+  </p>
+{% else %}
+  <p class="muted">Keine Angebotsdaten – nur FUTBIN liefert sie (FUTBIN-Link in der Watchlist hinterlegen).</p>
+{% endif %}
+
 <h3>Preisverlauf (7 Tage, {{ platform_label }})</h3>
 {% if d.chart %}
   <div class="chart-box"><canvas id="price-chart" aria-label="Preisverlauf"></canvas></div>
   <script type="application/json" id="chart-data">{{ d.chart | tojson }}</script>
 {% else %}
   <p class="muted">Noch keine Preise in den letzten 7 Tagen.</p>
+{% endif %}
+
+{% if a.hours %}
+<h3>Tageszeit- und Wochentagsprofil</h3>
+<p class="muted"><small>Durchschnittspreis relativ zum Gesamtmittel der letzten 30 Tage (Ortszeit).</small></p>
+<div class="grid">
+  <div class="chart-box small"><canvas id="hour-chart" aria-label="Tageszeitprofil"></canvas></div>
+  <div class="chart-box small"><canvas id="weekday-chart" aria-label="Wochentagsprofil"></canvas></div>
+</div>
+<script type="application/json" id="profile-data">{{ profiles | tojson }}</script>
 {% endif %}
 
 <h3>Preis erfassen</h3>
@@ -59,7 +132,7 @@
 {% endblock %}
 
 {% block scripts %}
-{% if d.chart %}
+{% if d.chart or a.hours %}
 <script src="/static/vendor/chart.umd.min.js"></script>
 <script src="/static/player-chart.js"></script>
 {% endif %}

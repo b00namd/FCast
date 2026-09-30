@@ -369,3 +369,124 @@ def test_formatters() -> None:
     assert format_coins(None) == chr(0x2013)
     assert format_pct(-20.0) == "-20,0 %"
     assert format_pct(3.25) == "+3,2 %"
+
+
+# --- analysis & signals (Phase 4) ------------------------------------------
+
+
+def seed_dip_and_uev(collector: Collector) -> None:
+    """Card 1: clear dip below the 7-day mean. Card 2: thin supply, rising, ÜV chance."""
+    now = datetime.now(UTC)
+    add_watch(collector, 1)
+    add_watch(collector, 2)
+    for hours in range(160, 0, -1):
+        add_price(collector, 1, 10_000, now - timedelta(hours=hours + 1), source="futbin")
+        rising = round(85_000 + 15_000 * (160 - hours) / 160)
+        add_price(collector, 2, rising, now - timedelta(hours=hours + 1), source="futbin")
+    add_price(collector, 1, 8_000, now - timedelta(minutes=5), source="futbin")
+    add_price(collector, 2, 100_000, now - timedelta(minutes=5), source="futbin")
+    with collector.session_factory.begin() as session:
+        for ea_id, listings in ((1, (8_000, 8_100, 8_200, 8_300, 8_400)), (2, (100_000, 130_000))):
+            player = repo.get_player_by_ea_id(session, ea_id)
+            assert player is not None
+            repo.record_market_state(
+                session, player, Platform.PC, "futbin", now, listings, 150, 300_000
+            )
+
+
+def test_signals_page(client: TestClient, collector: Collector) -> None:
+    seed_dip_and_uev(collector)
+    page = client.get("/signals").text
+    assert "Kauf-Dip" in page
+    assert "ÜV-Chance" in page
+    assert "129.000" in page  # listing just below the next offer
+
+    only_dip = client.get("/signals?rule=BUY_DIP").text
+    assert "Kauf-Dip" in only_dip
+    assert "129.000" not in only_dip
+    assert "Aktuell keine Signale" in client.get("/signals?rule=SELL_TARGET").text
+
+
+def test_prices_overview_shows_signal_and_extinct_badges(
+    client: TestClient, collector: Collector
+) -> None:
+    seed_dip_and_uev(collector)
+    add_watch(collector, 3)
+    add_price(collector, 3, 50_000, datetime.now(UTC) - timedelta(hours=2))
+    with collector.session_factory.begin() as session:
+        player = repo.get_player_by_ea_id(session, 3)
+        assert player is not None
+        repo.record_market_state(
+            session, player, Platform.PC, "futbin", datetime.now(UTC), (), 150, 200_000
+        )
+    page = client.get("/prices").text
+    assert "/signals?rule=BUY_DIP" in page
+    assert "/signals?rule=OVERPRICE_CHANCE" in page
+    assert "extinct" in page
+
+
+def test_player_page_shows_analysis(client: TestClient, collector: Collector) -> None:
+    seed_dip_and_uev(collector)
+    page = client.get("/players/2").text
+    assert "Angebotslage" in page
+    assert "130.000" in page
+    assert "ÜV-Score" in page
+    assert "Einstellen zu" in page
+    assert 'id="profile-data"' in page
+    dip = client.get("/players/1").text
+    assert "Kaufen bis max." in dip
+
+
+def test_player_page_marks_outlier(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 5)
+    add_price(collector, 5, 8_150_000, datetime.now(UTC) - timedelta(minutes=5), source="futbin")
+    with collector.session_factory.begin() as session:
+        player = repo.get_player_by_ea_id(session, 5)
+        assert player is not None
+        repo.record_market_state(
+            session,
+            player,
+            Platform.PC,
+            "futbin",
+            datetime.now(UTC),
+            (5_500_000, 8_150_000),
+            75_000,
+            14_500_000,
+        )
+    page = client.get("/players/5").text
+    assert "gilt als Ausreißer" in page
+    assert "Marktpreis 8.150.000" in page
+
+
+def test_player_page_without_supply_data(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 6)
+    add_price(collector, 6, 1_000, datetime.now(UTC))
+    assert "Keine Angebotsdaten" in client.get("/players/6").text
+
+
+def test_outlier_does_not_inflate_overprice_score(client: TestClient, collector: Collector) -> None:
+    from fcast.analysis.service import analyze_player
+
+    now = datetime.now(UTC)
+    add_watch(collector, 5)
+    for hours in range(48, 0, -1):
+        add_price(collector, 5, 8_150_000, now - timedelta(hours=hours), source="futbin")
+    with collector.session_factory.begin() as session:
+        player = repo.get_player_by_ea_id(session, 5)
+        assert player is not None
+        repo.record_market_state(
+            session,
+            player,
+            Platform.PC,
+            "futbin",
+            now,
+            (5_500_000, 8_150_000, 8_300_000, 8_350_000, 8_400_000),
+            75_000,
+            14_500_000,
+        )
+        result = analyze_player(session, player, collector.settings, now)
+    assert result.outlier == 5_500_000
+    assert result.supply is not None
+    assert result.supply.listings[0] == 8_150_000
+    assert result.overprice is not None
+    assert result.overprice.score < 40  # the 48 % gap to the outlier must not count

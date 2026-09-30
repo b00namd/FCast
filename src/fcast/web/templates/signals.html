@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Signale{% endblock %}
+{% block content %}
+<h2>Signale</h2>
+<nav aria-label="Filter">
+  <ul>
+    <li><a href="/signals" {% if not selected %}aria-current="page"{% endif %}>Alle</a></li>
+    {% for rule in rules %}
+      <li><a href="/signals?rule={{ rule.value }}" {% if selected == rule %}aria-current="page"{% endif %}>{{ labels[rule] }}</a></li>
+    {% endfor %}
+  </ul>
+</nav>
+
+{% if not signals %}
+  <p class="muted">Aktuell keine Signale{% if selected %} für „{{ labels[selected] }}“{% endif %}.</p>
+{% else %}
+<div class="overflow-auto">
+<table class="striped">
+  <thead>
+    <tr>
+      <th>Signal</th>
+      <th>Spieler</th>
+      <th class="num">Preis</th>
+      <th class="num hide-sm">Ø 7 Tage</th>
+      <th class="num">Empfehlung</th>
+      <th class="num">Profit</th>
+      <th class="hide-sm">Begründung</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for s in signals %}
+    <tr>
+      <td class="nowrap">
+        <span class="badge {% if s.rule.value == 'BUY_DIP' %}warn{% elif s.rule.value == 'OVERPRICE_CHANCE' %}bad{% else %}good{% endif %}">{{ s.label }}</span>
+        {% if s.score is not none %}<small class="muted">{{ s.score | round | int }}</small>{% endif %}
+      </td>
+      <td><a href="/players/{{ s.ea_id }}">{{ s.name }}</a></td>
+      <td class="num">{{ s.price | coins }}</td>
+      <td class="num hide-sm">{{ s.reference | coins }}</td>
+      <td class="num">
+        {% if s.rule.value == 'BUY_DIP' %}<small class="muted">max.</small>{% else %}<small class="muted">einstellen</small>{% endif %}
+        {{ s.recommended | coins }}
+      </td>
+      <td class="num">{{ s.expected_profit | coins }}</td>
+      <td class="hide-sm"><small>{{ s.reasons | join(" · ") }}</small></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted"><small>Profit nach 5 % EA-Steuer. Bei „ÜV-Chance“: Kauf zum aktuellen Preis und Einstellen zur Empfehlung; bei extinct nur für Karten, die du schon hast.</small></p>
+{% endif %}
+{% endblock %}

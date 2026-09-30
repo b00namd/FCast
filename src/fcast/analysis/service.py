@@ -1,0 +1,122 @@
+"""Runs the analysis for cards from the database (used by dashboard, CLI and alerts)."""
+
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+
+from sqlalchemy.orm import Session
+
+from fcast.analysis import signals as sig
+from fcast.analysis.market import effective_price, headroom_pct, supply_gap_pct
+from fcast.analysis.stats import Point, PriceStats, hour_profile, price_stats, weekday_profile
+from fcast.config import Settings
+from fcast.db import repositories as repo
+from fcast.db.models import MarketState, Player, WatchlistEntry
+
+PROFILE_WINDOW = timedelta(days=30)
+
+
+@dataclass
+class CardAnalysis:
+    player: Player
+    entry: WatchlistEntry | None
+    stats: PriceStats
+    market: MarketState | None
+    supply: sig.Supply | None
+    overprice: sig.OverpriceScore | None
+    effective_price: int | None = None  # market price after outlier dampening
+    signals: list[sig.Signal] = field(default_factory=list)
+    hours: dict[int, float] = field(default_factory=dict)
+    weekdays: dict[int, float] = field(default_factory=dict)
+
+    @property
+    def extinct(self) -> bool:
+        return self.supply is not None and self.supply.extinct
+
+    @property
+    def outlier(self) -> int | None:
+        """The cheapest listing if it was ignored as outlier."""
+        if self.market is None or not self.market.listings:
+            return None
+        cheapest = self.market.listings[0]
+        return cheapest if self.effective_price != cheapest else None
+
+    @property
+    def supply_gap_pct(self) -> float | None:
+        return supply_gap_pct(self.market.listings) if self.market else None
+
+    @property
+    def headroom_pct(self) -> float | None:
+        if self.stats.current is None or self.market is None:
+            return None
+        return headroom_pct(self.stats.current, self.market.range_max)
+
+
+def _supply(
+    market: MarketState | None, latest_at: datetime | None, outlier_gap_pct: float
+) -> sig.Supply | None:
+    """Supply for the signals: without outlier listings, and only if not older than the price."""
+    if market is None:
+        return None
+    if latest_at is not None and market.observed_at < latest_at and market.listings:
+        # A newer price came from a source without supply data; do not mix stale depth in.
+        return None
+    effective = effective_price(market.listings, outlier_gap_pct)
+    listings = tuple(p for p in market.listings if effective is None or p >= effective)
+    return sig.Supply(
+        listings=listings, range_max=market.range_max, extinct_since=market.extinct_since
+    )
+
+
+def analyze_player(
+    session: Session, player: Player, settings: Settings, now: datetime
+) -> CardAnalysis:
+    platform = settings.platform
+    snapshots = repo.list_snapshots(session, player, platform, since=now - PROFILE_WINDOW)
+    points: list[Point] = [(s.captured_at, s.price) for s in snapshots]
+    stats = price_stats(points, now)
+    market = repo.get_market_state(session, player, platform)
+    supply = _supply(market, stats.current_at, settings.outlier_gap_pct)
+    entry = repo.get_watch(session, player)
+    cfg = sig.SignalConfig.from_settings(settings)
+    name = player.display_name
+
+    found = [
+        sig.buy_dip(player.ea_id, name, stats, cfg),
+        sig.sell_target(player.ea_id, name, stats, entry.target_sell if entry else None),
+        sig.overprice_chance(player.ea_id, name, stats, supply, cfg),
+    ]
+    return CardAnalysis(
+        player=player,
+        entry=entry,
+        stats=stats,
+        market=market,
+        supply=supply,
+        overprice=sig.overprice_score(stats, supply, cfg),
+        effective_price=(
+            effective_price(market.listings, settings.outlier_gap_pct) if market else None
+        ),
+        signals=[s for s in found if s is not None],
+        hours=hour_profile(points, settings.tz),
+        weekdays=weekday_profile(points, settings.tz),
+    )
+
+
+def analyze_watchlist(session: Session, settings: Settings, now: datetime) -> list[CardAnalysis]:
+    return [
+        analyze_player(session, entry.player, settings, now)
+        for entry in repo.list_watchlist(session, active_only=True)
+    ]
+
+
+def current_signals(
+    session: Session, settings: Settings, now: datetime, rule: sig.Rule | None = None
+) -> list[sig.Signal]:
+    """All signals for active watchlist cards, strongest first."""
+    found = [
+        signal
+        for analysis in analyze_watchlist(session, settings, now)
+        for signal in analysis.signals
+        if rule is None or signal.rule == rule
+    ]
+    order = {sig.Rule.BUY_DIP: 0, sig.Rule.OVERPRICE_CHANCE: 1, sig.Rule.SELL_TARGET: 2}
+    return sorted(found, key=lambda s: (order[s.rule], -(s.score or 0), s.name))

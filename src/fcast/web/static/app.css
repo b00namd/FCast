@@ -45,6 +45,8 @@ tr.inactive { opacity: 0.55; }
 .stats .value { font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .chart-box { position: relative; height: 320px; margin-bottom: 1.5rem; }
+.chart-box.small { height: 200px; }
+a.badge { text-decoration: none; margin-left: 0.2rem; }
 
 @media (max-width: 640px) {
   .hide-sm { display: none; }

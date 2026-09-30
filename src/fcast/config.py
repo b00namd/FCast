@@ -47,6 +47,25 @@ class Settings(BaseSettings):
     # Random delay (seconds) added to each scheduled run so requests don't hit fixed times.
     collect_jitter_s: int = Field(default=180, ge=0, le=1800)
 
+    # --- Analysis (Phase 4) ---
+    # Cheapest listing more than this % below the second one counts as outlier.
+    outlier_gap_pct: float = Field(default=15.0, gt=0, lt=100)
+    # BUY_DIP: price at least dip_pct below the 7-day mean and expected profit after tax
+    # (selling at the mean) of at least min_margin_pct of the buy price and min_profit coins.
+    dip_pct: float = Field(default=10.0, gt=0, lt=100)
+    min_margin_pct: float = Field(default=5.0, ge=0)
+    min_profit: int = Field(default=500, ge=0)
+    # OVERPRICE_CHANCE (ÜV): score 0-100 from weighted components; signal at >= threshold.
+    uev_threshold: float = Field(default=60.0, ge=0, le=100)
+    uev_weight_supply: float = Field(default=0.40, ge=0)
+    uev_weight_trend: float = Field(default=0.25, ge=0)
+    uev_weight_headroom: float = Field(default=0.15, ge=0)
+    uev_weight_liquidity: float = Field(default=0.20, ge=0)
+    # Listing markup over the market price if the supply gap gives no better target.
+    uev_min_markup_pct: float = Field(default=5.0, ge=0)
+    # Suggested markup over the last known price for extinct cards.
+    uev_extinct_markup_pct: float = Field(default=20.0, ge=0)
+
     # Web dashboard (Basic Auth). The dashboard refuses to start without a password.
     web_user: str = "fcast"
     web_password: SecretStr | None = None

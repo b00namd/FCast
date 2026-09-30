@@ -11,6 +11,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from fcast.analysis import service as analysis
+from fcast.analysis import signals as sig
 from fcast.collector.service import JOB_ID, Collector
 from fcast.config import Platform, Settings
 from fcast.db import repositories as repo
@@ -100,9 +102,32 @@ def index() -> RedirectResponse:
 
 @pages.get("/prices", response_class=HTMLResponse)
 def prices(request: Request) -> HTMLResponse:
+    settings = _settings(request)
+    now = utcnow()
     with _db(request) as session:
-        rows = views.price_overview(session, _settings(request).platform, utcnow())
-        return _render(request, "prices.html", {"rows": rows, "nav": "prices"})
+        rows = views.price_overview(session, settings.platform, now)
+        analyses = {a.player.ea_id: a for a in analysis.analyze_watchlist(session, settings, now)}
+        return _render(
+            request, "prices.html", {"rows": rows, "analyses": analyses, "nav": "prices"}
+        )
+
+
+@pages.get("/signals", response_class=HTMLResponse)
+def signals_page(request: Request, rule: str | None = None) -> HTMLResponse:
+    selected = next((r for r in sig.Rule if r.value == rule), None)
+    with _db(request) as session:
+        found = analysis.current_signals(session, _settings(request), utcnow(), selected)
+        return _render(
+            request,
+            "signals.html",
+            {
+                "signals": found,
+                "rules": list(sig.Rule),
+                "labels": sig.RULE_LABELS,
+                "selected": selected,
+                "nav": "signals",
+            },
+        )
 
 
 # --- watchlist -------------------------------------------------------------
@@ -292,14 +317,25 @@ def watch_toggle(request: Request, ea_id: int) -> HTMLResponse:
 @pages.get("/players/{ea_id}", response_class=HTMLResponse)
 def player_page(request: Request, ea_id: int) -> HTMLResponse:
     settings = _settings(request)
+    now = utcnow()
     with _db(request) as session:
-        detail = views.player_detail(session, ea_id, settings.platform, utcnow())
+        detail = views.player_detail(session, ea_id, settings.platform, now)
         if detail is None:
             raise HTTPException(status_code=404, detail="Spieler nicht gefunden")
+        result = analysis.analyze_player(session, detail.player, settings, now)
         return _render(
             request,
             "player.html",
-            {"d": detail, "nav": "prices", "error": request.query_params.get("error")},
+            {
+                "d": detail,
+                "a": result,
+                "profiles": {
+                    "hours": result.hours,
+                    "weekdays": result.weekdays,
+                },
+                "nav": "prices",
+                "error": request.query_params.get("error"),
+            },
         )
 
 

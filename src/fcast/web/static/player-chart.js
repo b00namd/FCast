@@ -53,3 +53,36 @@
     },
   });
 })();
+
+// Hour-of-day and weekday profiles: {hours: {h: pct}, weekdays: {d: pct}}
+(function () {
+  const dataElement = document.getElementById("profile-data");
+  if (!dataElement || typeof Chart === "undefined") return;
+  const profiles = JSON.parse(dataElement.textContent);
+  const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+  const pct = (value) => `${value > 0 ? "+" : ""}${value.toFixed(1).replace(".", ",")} %`;
+
+  function bars(canvasId, entries, labelFor) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || entries.length === 0) return;
+    new Chart(canvas, {
+      type: "bar",
+      data: {
+        labels: entries.map(([key]) => labelFor(key)),
+        datasets: [{
+          data: entries.map(([, value]) => value),
+          backgroundColor: entries.map(([, value]) => (value >= 0 ? "#2ecc71" : "#e74c3c")),
+        }],
+      },
+      options: {
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (item) => pct(item.parsed.y) } } },
+        scales: { y: { ticks: { callback: (value) => pct(Number(value)) } } },
+      },
+    });
+  }
+
+  const byKey = (object) => Object.entries(object).map(([k, v]) => [Number(k), v]).sort((a, b) => a[0] - b[0]);
+  bars("hour-chart", byKey(profiles.hours), (hour) => `${hour} h`);
+  bars("weekday-chart", byKey(profiles.weekdays), (day) => weekdayNames[day]);
+})();

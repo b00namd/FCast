@@ -318,3 +318,106 @@ def serve(
         access_log=verbose,
         proxy_headers=False,
     )
+
+
+@app.command()
+def analyze(ea_id: Annotated[int, typer.Argument(help="EA card id.", min=1)]) -> None:
+    """Key figures, supply picture and signals for one card."""
+    from fcast.analysis.service import analyze_player
+    from fcast.db import repositories as repo
+    from fcast.db.base import utcnow
+
+    settings = get_settings()
+    with _db_session() as session:
+        player = repo.get_player_by_ea_id(session, ea_id)
+        if player is None:
+            typer.secho(f"Unknown card {ea_id}.", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+        result = analyze_player(session, player, settings, utcnow())
+        stats = result.stats
+
+        def pct(value: float | None) -> str:
+            return "-" if value is None else f"{value:+.1f} %"
+
+        table = Table(title=f"{player.display_name} ({settings.platform.value})")
+        table.add_column("Kennzahl")
+        table.add_column("Wert", justify="right")
+        rows = [
+            ("Aktuell", format_coins(stats.current)),
+            ("Ø 24 h", format_coins(round(stats.day.mean)) if stats.day else "-"),
+            ("Ø 7 Tage", format_coins(round(stats.week.mean)) if stats.week else "-"),
+            (
+                "Min / Max 7 Tage",
+                f"{format_coins(stats.week.low)} / {format_coins(stats.week.high)}"
+                if stats.week
+                else "-",
+            ),
+            ("Änderung 24 h", pct(stats.change_24h_pct)),
+            ("Abweichung zu Ø 7 Tage", pct(stats.deviation_pct)),
+            ("Volatilität", pct(stats.volatility_pct).lstrip("+")),
+            (
+                "Preisänderungen / Tag",
+                "-" if stats.changes_per_day is None else f"{stats.changes_per_day:.1f}",
+            ),
+            (
+                "ÜV-Score",
+                "-" if result.overprice is None else f"{result.overprice.score:.0f} / 100",
+            ),
+        ]
+        if result.market is not None:
+            listings = ", ".join(format_coins(p) for p in result.market.listings) or "extinct"
+            rows.append(("Angebote", listings))
+            rows.append(
+                (
+                    "EA-Spanne",
+                    f"{format_coins(result.market.range_min)} - "
+                    f"{format_coins(result.market.range_max)}",
+                )
+            )
+        for label, value in rows:
+            table.add_row(label, value)
+        console.print(table)
+        for signal in result.signals:
+            console.print(
+                f"[bold]{signal.label}[/bold]: Empfehlung {format_coins(signal.recommended)}, "
+                f"Profit {format_coins(signal.expected_profit)} - {'; '.join(signal.reasons)}"
+            )
+
+
+@app.command()
+def signals(
+    rule: Annotated[
+        str | None,
+        typer.Option("--rule", help="BUY_DIP, SELL_TARGET or OVERPRICE_CHANCE."),
+    ] = None,
+) -> None:
+    """Current signals for all active watchlist cards."""
+    from fcast.analysis.service import current_signals
+    from fcast.analysis.signals import Rule
+    from fcast.db.base import utcnow
+
+    selected = None
+    if rule is not None:
+        try:
+            selected = Rule(rule.upper())
+        except ValueError as exc:
+            raise typer.BadParameter(f"unknown rule {rule}", param_hint="--rule") from exc
+    with _db_session() as session:
+        found = current_signals(session, get_settings(), utcnow(), selected)
+    if not found:
+        typer.echo("Keine Signale.")
+        return
+    table = Table(title="Signale")
+    for column in ("Signal", "Karte", "Preis", "Ø 7 Tage", "Empfehlung", "Profit", "Score"):
+        table.add_column(column, justify="right" if column not in ("Signal", "Karte") else "left")
+    for s in found:
+        table.add_row(
+            s.label,
+            s.name,
+            format_coins(s.price),
+            format_coins(s.reference),
+            format_coins(s.recommended),
+            format_coins(s.expected_profit),
+            "-" if s.score is None else f"{s.score:.0f}",
+        )
+    console.print(table)

@@ -167,3 +167,39 @@ def test_sources_status_and_resume(db_path: Path, monkeypatch: pytest.MonkeyPatc
     result = runner.invoke(app, ["sources", "resume", "futbin"])
     assert result.exit_code == 0
     assert "HTTP 429" not in runner.invoke(app, ["sources", "status"]).output
+
+
+def test_analyze_and_signals_commands(db_path: Path) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from fcast.config import Platform
+    from fcast.db import repositories as repo
+    from fcast.db.session import create_db_engine, create_session_factory
+
+    assert runner.invoke(app, ["db", "upgrade"]).exit_code == 0
+    engine = create_db_engine(get_settings().db_url)
+    now = datetime.now(UTC)
+    with create_session_factory(engine).begin() as session:
+        player = repo.upsert_player(session, 1, repo.PlayerDetails(name="Dip"))
+        repo.set_watch(session, player)
+        for hours in range(100, 0, -1):
+            repo.add_snapshot(
+                session, player, Platform.CONSOLE, 10_000, "futbin", now - timedelta(hours=hours)
+            )
+        repo.add_snapshot(session, player, Platform.CONSOLE, 8_000, "futbin", now)
+        repo.record_market_state(
+            session, player, Platform.CONSOLE, "futbin", now, (8_000, 8_100), 150, 50_000
+        )
+    engine.dispose()
+
+    result = runner.invoke(app, ["analyze", "1"])
+    assert result.exit_code == 0, result.output
+    assert "8.000" in result.output
+    assert "Kauf-Dip" in result.output
+
+    result = runner.invoke(app, ["signals"])
+    assert result.exit_code == 0, result.output
+    assert "Kauf-Dip" in result.output
+    assert "Keine Signale." in runner.invoke(app, ["signals", "--rule", "sell_target"]).output
+    assert runner.invoke(app, ["signals", "--rule", "nope"]).exit_code != 0
+    assert runner.invoke(app, ["analyze", "999"]).exit_code == 1

@@ -22,8 +22,11 @@
     {% set change = row.change_pct %}
     <tr>
       <td><a href="/players/{{ row.player.ea_id }}">{{ row.player.display_name }}</a>
+        {% set a = analyses.get(row.player.ea_id) %}
+        {% if a and a.extinct %}<span class="badge bad" title="Keine Angebote auf dem Markt">extinct</span>{% endif %}
         {% if row.buy_hit %}<span class="badge warn" title="Preis ≤ Kaufziel">Kaufziel</span>{% endif %}
         {% if row.sell_hit %}<span class="badge good" title="Preis ≥ Verkaufsziel">Verkaufsziel</span>{% endif %}
+        {% if a %}{% for s in a.signals if s.rule.value != "SELL_TARGET" %}<a href="/signals?rule={{ s.rule.value }}" class="badge {% if s.rule.value == 'BUY_DIP' %}warn{% else %}bad{% endif %}">{{ s.label }}</a>{% endfor %}{% endif %}
       </td>
       <td class="num">{% if row.latest %}{{ row.latest.price | coins }}{% else %}<span class="muted">kein Preis</span>{% endif %}</td>
       <td class="num {% if change is not none and change > 0 %}up{% elif change is not none and change < 0 %}down{% endif %}">{{ change | pct }}</td>

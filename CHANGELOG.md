@@ -4,6 +4,28 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Phase 4 – Marktanalyse & Angebotslage
+- `analysis/pricing.py`: Preisstufen (runden ab/auf/nächste, n Stufen weiter), `net_after_tax()`,
+  `profit()`, `break_even_sell_price()`; Grenzwerte getestet. Die Stufen aus `CLAUDE.md` sind für
+  50er/100er belegt und passen zu allen bisher gesehenen FUTBIN-Preisen.
+- **Angebotslage:** FUTBIN liefert jetzt alle fünf günstigsten Angebote und die EA-Preisspanne;
+  gespeichert in der neuen Tabelle `market_state` (aktueller Stand je Karte/Plattform).
+  **Extinct** (keine Angebote) wird erkannt und mit Startzeit gespeichert; die Ersatzquelle wird
+  dann nicht mehr nach einem veralteten Preis gefragt.
+- **Ausreißer:** Liegt das günstigste Angebot mehr als `FCAST_OUTLIER_GAP_PCT` (15 %) unter dem
+  zweiten, wird das zweite als Marktpreis gespeichert; das Ausreißer-Angebot bleibt sichtbar und
+  zählt nicht in den ÜV-Score.
+- `analysis/stats.py`: 24-h- und 7-Tage-Kennzahlen, Änderung 24 h, Abweichung zum Ø, Volatilität,
+  Preisänderungen pro Tag, Tageszeit- und Wochentagsprofil (Ortszeit); robust bei Datenlücken.
+- `analysis/signals.py`: `BUY_DIP` (mit empfohlenem Max-Kaufpreis), `SELL_TARGET`,
+  `OVERPRICE_CHANCE` (ÜV-Score 0–100 aus Angebot, Trend, Luft bis EA-Maximum, Liquidität;
+  Einstellpreis knapp unter dem nächsten Angebot, Profit nach Steuer). Schwellen und Gewichte
+  sind Settings (`FCAST_DIP_PCT`, `FCAST_UEV_*` …).
+- Dashboard: neue Seite **Signale** mit Filter; Spielerdetail mit Signalen, Kennzahlen,
+  Angebotslage (Ausreißer markiert, extinct seit …) und Profil-Charts; Übersicht mit
+  extinct- und Signal-Markierungen.
+- CLI: `fcast analyze <ea_id>`, `fcast signals [--rule …]`.
+
 ### Phase 3 – Basis-Weboberfläche
 - `fcast serve`: FastAPI-Dashboard und Collector/Scheduler in einem Prozess (Scheduler im Lifespan).
   Docker startet jetzt `serve`, Port 8000, Docker-Healthcheck über `/health`.
