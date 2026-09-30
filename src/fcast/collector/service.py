@@ -11,18 +11,23 @@ from typing import Any
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from fcast.alerts.engine import AlertEngine, build_notifier
-from fcast.collector.job import CollectResult, collect_once
+from fcast.collector.job import CollectResult, apply_player_info, collect_once
 from fcast.config import Settings
 from fcast.db import migrate
 from fcast.db import repositories as repo
 from fcast.db.base import utcnow
-from fcast.db.session import create_db_engine, create_session_factory
-from fcast.sources.base import PriceSource
+from fcast.db.session import create_db_engine, create_session_factory, session_scope
+from fcast.sources.base import PriceSource, SourceBlockedError
+from fcast.sources.futbin import FutbinSource
 from fcast.sources.registry import build_sources
 
 logger = logging.getLogger(__name__)
 
 JOB_ID = "collect"
+FUTBIN = "futbin"
+DISCOVERY_PER_RUN = 3
+DISCOVERY_RETRY = timedelta(days=1)
+DISCOVERY_PREFIX = "futbin.lookup."
 
 
 def failed_players(result: CollectResult) -> int | None:
@@ -58,7 +63,74 @@ class Collector:
     def running(self) -> bool:
         return self._lock.locked()
 
+    def _futbin(self) -> FutbinSource | None:
+        return next((s for s in self.sources if isinstance(s, FutbinSource)), None)
+
+    async def discover_futbin_links(
+        self,
+        limit: int = DISCOVERY_PER_RUN,
+        only: Sequence[int] | None = None,
+        hints: Sequence[str] = (),
+    ) -> list[int]:
+        """Look up missing FUTBIN links for watched cards; returns the EA ids that got one.
+
+        Each card is tried at most once per DISCOVERY_RETRY unless named in `only`.
+        """
+        source = self._futbin()
+        if source is None:
+            return []
+        now = utcnow()
+        with session_scope(self.session_factory) as session:
+            if FUTBIN in repo.paused_sources(session, now):
+                return []
+            attempts = repo.get_app_settings(session, DISCOVERY_PREFIX)
+            todo: list[tuple[int, list[str]]] = []
+            for entry in repo.list_watchlist(session, active_only=True):
+                player = entry.player
+                if only is not None and player.ea_id not in only:
+                    continue
+                if repo.get_source_ref(session, player.ea_id, FUTBIN) is not None:
+                    continue
+                names = [*hints, *([player.name] if player.name else [])]
+                if not names:
+                    continue  # the name arrives with the first collection run
+                last = attempts.get(f"{DISCOVERY_PREFIX}{player.ea_id}")
+                if only is None and last and now - datetime.fromisoformat(last) < DISCOVERY_RETRY:
+                    continue
+                todo.append((player.ea_id, names))
+        found: list[int] = []
+        for ea_id, names in todo[:limit]:
+            try:
+                result = await source.discover(ea_id, names)
+            except SourceBlockedError as exc:
+                with session_scope(self.session_factory) as session:
+                    repo.pause_source(
+                        session,
+                        FUTBIN,
+                        now + timedelta(hours=self.settings.source_pause_h),
+                        str(exc),
+                    )
+                logger.warning("FUTBIN refused the lookup, pausing it: %s", exc)
+                break
+            except Exception:
+                logger.exception("FUTBIN lookup for %s failed", ea_id)
+                result = None
+            with session_scope(self.session_factory) as session:
+                repo.set_app_setting(session, f"{DISCOVERY_PREFIX}{ea_id}", now.isoformat())
+                if result is not None:
+                    path, info = result
+                    player = repo.upsert_player(session, ea_id)
+                    repo.set_source_ref(session, player, FUTBIN, path)
+                    apply_player_info(session, info)
+                    found.append(ea_id)
+        return found
+
     async def run_once(self) -> CollectResult:
+        # New FUTBIN links first, so this run already uses them.
+        try:
+            await self.discover_futbin_links()
+        except Exception:
+            logger.exception("FUTBIN link discovery failed")
         async with self._lock:  # never run two collections at the same time
             if not self.sources:
                 logger.warning("no price sources configured (FCAST_SOURCES / FCAST_MANUAL_CSV)")

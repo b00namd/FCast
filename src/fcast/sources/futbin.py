@@ -8,9 +8,10 @@ robots.txt, rate limits and an honest User-Agent are still enforced by `PoliteHt
 """
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from selectolax.parser import HTMLParser, Node
 
@@ -26,6 +27,9 @@ from fcast.sources.base import (
     SourceError,
 )
 from fcast.sources.http import PoliteHttpClient
+
+if TYPE_CHECKING:
+    from fcast.sources.futbin_locator import FutbinLocator
 
 SOURCE_NAME = "futbin"
 BASE_URL = "https://www.futbin.com"
@@ -210,6 +214,7 @@ class FutbinSource(PriceSource):
         self._client = client
         self._lookup = lookup
         self._platform = platform  # usage data (chem style, games) is platform specific
+        self._locator: FutbinLocator | None = None
 
     async def _page(self, ea_id: int) -> str:
         ref = self._lookup(ea_id)
@@ -239,6 +244,18 @@ class FutbinSource(PriceSource):
         if ea_id is None:
             raise FutbinFormatError("no card image found, cannot determine the EA id")
         return parse_player(html, ea_id, self._platform)
+
+    async def discover(self, ea_id: int, hints: Sequence[str]) -> tuple[str, PlayerInfo] | None:
+        """Find the FUTBIN page of a card by name hints; returns (path, details)."""
+        from fcast.sources.futbin_locator import FutbinLocator
+
+        if self._locator is None:
+            self._locator = FutbinLocator(self._client)
+        path = await self._locator.find(ea_id, hints)
+        if path is None:
+            return None
+        html = await self._client.get_text(BASE_URL + path)  # cached by the lookup
+        return path, parse_player(html, ea_id, self._platform)
 
     async def aclose(self) -> None:
         await self._client.aclose()

@@ -57,6 +57,13 @@ FUTBIN_PAGES = {
     "/27/player/22947/michael-olise": "22947-olise-totw.html",
 }
 FUTBIN_REQUESTS: list[str] = []
+FUTBIN_SITEMAPS = {
+    "/sitemap_index.xml": "<sitemapindex><sitemap><loc>"
+    "https://www.futbin.com/27/player/0/sitemap.xml</loc></sitemap></sitemapindex>",
+    "/27/player/0/sitemap.xml": "<urlset>"
+    "<url><loc>https://www.futbin.com/27/player/22947/michael-olise</loc></url>"
+    "<url><loc>https://www.futbin.com/27/player/21487/maradona</loc></url></urlset>",
+}
 
 
 def fixture_futbin(collector: Collector) -> FutbinSource:
@@ -68,6 +75,8 @@ def fixture_futbin(collector: Collector) -> FutbinSource:
         FUTBIN_REQUESTS.append(request.url.path)
         if request.url.path == "/robots.txt":
             return httpx.Response(200, text="User-agent: *\nDisallow: /*?*\n")
+        if request.url.path in FUTBIN_SITEMAPS:
+            return httpx.Response(200, text=FUTBIN_SITEMAPS[request.url.path])
         page = FUTBIN_PAGES.get(request.url.path)
         if page is None:
             return httpx.Response(404)
@@ -723,3 +732,24 @@ def test_edit_row_checks_new_futbin_link(client: TestClient, collector: Collecto
         player = repo.get_player_by_ea_id(session, 190042)
         assert player is not None
         assert player.chem_style == "Basic"  # PC recommendation from the page
+
+
+def test_futbin_link_is_found_in_background(client: TestClient, collector: Collector) -> None:
+    response = client.post(
+        "/watchlist",
+        data={"ea_id": "https://www.fut.gg/players/247827-michael-olise/27-50579475/"},
+        headers=HTMX,
+    )
+    assert "wird im Hintergrund gesucht" in response.text
+    deadline = time.monotonic() + 5
+    ref = None
+    while time.monotonic() < deadline and ref is None:
+        time.sleep(0.05)
+        client.get("/health", auth=None)  # lets the app's event loop run the background task
+        with collector.session_factory() as session:
+            ref = repo.get_source_ref(session, 50579475, "futbin")
+    assert ref == "/27/player/22947/michael-olise"
+    with collector.session_factory() as session:
+        player = repo.get_player_by_ea_id(session, 50579475)
+        assert player is not None
+        assert player.chem_style == "Hunter"

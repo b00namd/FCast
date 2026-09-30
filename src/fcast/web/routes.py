@@ -24,6 +24,7 @@ from fcast.db.models import Player
 from fcast.db.session import session_scope
 from fcast.sources import futbin
 from fcast.sources.base import PlayerInfo, PlayerNotFoundError, SourceError
+from fcast.sources.futbin_locator import name_hints_from_futgg
 from fcast.sources.registry import make_http_client
 from fcast.web import forms, views
 
@@ -269,6 +270,19 @@ async def _card_for(
     return ea_id, info, errors
 
 
+def _start_futbin_discovery(request: Request, ea_id: int, id_text: str | None) -> bool:
+    """Search the FUTBIN page of a new card in the background (keeps the form fast)."""
+    collector = _collector(request)
+    if collector._futbin() is None:
+        return False
+    hints = name_hints_from_futgg(id_text or "")
+    tasks: set[asyncio.Task[Any]] = request.app.state.background_tasks
+    task = asyncio.create_task(collector.discover_futbin_links(only=[ea_id], hints=hints))
+    tasks.add(task)
+    task.add_done_callback(tasks.discard)
+    return True
+
+
 @pages.post("/watchlist", response_model=None)
 async def watchlist_add(
     request: Request,
@@ -303,6 +317,8 @@ async def watchlist_add(
             repo.set_watch_active(session, player, True)
             session.flush()
             message = f"{player.display_name} gespeichert."
+            if data.futbin_ref is None and _start_futbin_discovery(request, parsed_id, ea_id):
+                message += " Der FUTBIN-Link wird im Hintergrund gesucht (dauert ca. 10-30 s)."
             if data.warning:
                 message += f" Hinweis: {data.warning}"
             form = {}

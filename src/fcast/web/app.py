@@ -63,6 +63,7 @@ def create_app(
         active = collector or Collector(settings)
         app.state.collector = active
         app.state.collect_task = None
+        app.state.background_tasks = set()
         scheduler: Any = None
         if run_scheduler:
             scheduler = create_scheduler(
@@ -76,11 +77,12 @@ def create_app(
         finally:
             if scheduler is not None:
                 scheduler.shutdown(wait=False)
-            task: asyncio.Task[Any] | None = app.state.collect_task
-            if task is not None and not task.done():
-                task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await task
+            pending = [app.state.collect_task, *app.state.background_tasks]
+            for task in pending:
+                if task is not None and not task.done():
+                    task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await task
             await active.aclose()
 
     app = FastAPI(

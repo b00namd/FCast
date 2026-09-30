@@ -5,6 +5,11 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 ## [Unreleased]
 
 ### Nach Phase 5 – Watchlist-Komfort & Chemstyle
+- **FUTBIN-Link wird automatisch gesucht**, wenn nur EA-ID oder FUT.GG-Link bekannt ist: FCast liest
+  FUTBINs Spieler-Sitemaps (einmal täglich, 3 Dateien), wählt Kandidaten über den Namen (Slug) und
+  prüft höchstens 6 Seiten, bis das Kartenbild die EA-ID zeigt. Läuft im Hintergrund nach dem
+  Hinzufügen und vor jedem Sammellauf für bis zu 3 Karten; erfolglose Suchen erst nach einem Tag
+  erneut, keine Suche während FUTBIN pausiert ist.
 - **FUTBIN-Link reicht:** Die EA-ID wird aus dem Kartenbild der FUTBIN-Seite gelesen
   (`p50579475.png` = Karten-ID bei Sonderkarten, `190042.png` = Spieler-ID = Karten-ID bei
   Basiskarten). Alternativ akzeptiert das Feld eine Zahl oder einen FUT.GG-/FUTNext-Link.
