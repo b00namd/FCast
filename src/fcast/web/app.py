@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).parent
 EMPTY = chr(0x2013)  # en dash shown for missing values
+WEEKDAYS = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 
 
 def format_coins(value: int | None) -> str:
@@ -40,7 +41,11 @@ def build_templates(settings: Settings) -> Jinja2Templates:
     tz = settings.tz
 
     def format_dt(value: datetime | None, fmt: str = "%d.%m. %H:%M") -> str:
-        return EMPTY if value is None else value.astimezone(tz).strftime(fmt)
+        if value is None:
+            return EMPTY
+        local = value.astimezone(tz)
+        # German weekday names independent of the server locale.
+        return local.strftime(fmt.replace("%a", WEEKDAYS[local.weekday()]))
 
     templates.env.filters["coins"] = format_coins
     templates.env.filters["pct"] = format_pct

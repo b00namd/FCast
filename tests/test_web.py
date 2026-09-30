@@ -859,3 +859,12 @@ def test_totw_refresh_runs_in_background(client: TestClient, collector: Collecto
     client.get("/health", auth=None)  # let the event loop run the task
     assert calls == [1]
     assert "Noch keine Kandidaten" in client.get("/totw").text
+
+
+def test_weekday_names_are_german(client: TestClient) -> None:
+    from fcast.web.app import build_templates
+
+    templates = build_templates(make_settings(Path(".")))
+    format_dt = templates.env.filters["dt"]
+    wednesday = datetime(2026, 9, 30, 17, 0, tzinfo=UTC)
+    assert format_dt(wednesday, "%a, %d.%m. %H:%M") == "Mi, 30.09. 19:00"
