@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% from "macros.html" import chem_list %}
+{% block title %}Promos{% endblock %}
+{% block content %}
+<h2>Leak- &amp; Promo-Radar</h2>
+{% if message %}<div class="message ok" role="status">{{ message }}</div>{% endif %}
+
+<div class="form-actions">
+  <a href="/promos/new" role="button">Neue Promo erfassen</a>
+  <form method="post" action="/promos/leaks/sync" style="margin:0">
+    <button type="submit" class="secondary outline">Feeds jetzt abrufen</button>
+  </form>
+</div>
+
+<h3>Kandidaten</h3>
+{% if not candidates %}
+  <p class="muted">Noch keine Kandidaten. Sie entstehen, sobald eine Promo mit Spielern, Vereinen, Ligen oder Nationen erfasst ist,
+  die in den nächsten 14 Tagen startet. Bewertet werden die Karten deiner Watchlist und des Kandidaten-Pools.</p>
+{% else %}
+<div class="overflow-auto">
+<table>
+  <thead>
+    <tr>
+      <th>Karte</th>
+      <th>Promo</th>
+      <th class="num">Score</th>
+      <th>Begründung</th>
+      <th class="num">Preis</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for c in candidates %}
+    <tr>
+      <td><a href="/players/{{ c.player.ea_id }}">{{ c.player.display_name }}</a>
+        {% if c.on_watchlist %}<span class="badge">Watchlist</span>{% elif c.in_pool %}<span class="badge">Pool</span>{% endif %}
+        {% if c.player.chem_styles %}<br>{{ chem_list(c.player) }}{% endif %}</td>
+      <td>{{ c.match.promo.name }}<br><small class="muted">{% if c.match.days_to_start >= 0 %}Start in {{ c.match.days_to_start | round(1) | string | replace(".", ",") }} Tagen{% else %}läuft{% endif %}</small></td>
+      <td class="num"><strong>{{ c.match.score | round | int }}</strong></td>
+      <td><small>{{ c.match.reasons | join(" · ") }}</small></td>
+      <td class="num">{{ c.price | coins }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h3>Promos</h3>
+{% if not promos %}
+  <p class="muted">Keine anstehenden oder laufenden Promos erfasst.</p>
+{% else %}
+<div class="overflow-auto">
+<table>
+  <thead><tr><th>Promo</th><th>Zeitraum</th><th>Konfidenz</th><th>Bezug</th><th></th></tr></thead>
+  <tbody>
+  {% for p in promos %}
+    <tr>
+      <td><strong>{{ p.name }}</strong>{% if p.source %}<br><small><a href="{{ p.source }}" target="_blank" rel="noreferrer">Quelle</a></small>{% endif %}
+        {% if p.starts_at <= now %}<span class="badge good">läuft</span>{% endif %}</td>
+      <td class="nowrap">{{ p.starts_at | dt("%a, %d.%m.") }}{% if p.ends_at %} – {{ p.ends_at | dt("%a, %d.%m.") }}{% endif %}</td>
+      <td class="num">{{ (p.confidence * 100) | round | int }} %</td>
+      <td>{% for link in p.links %}<span class="badge">{{ {"player": "Spieler", "club": "Verein", "league": "Liga", "nation": "Nation"}[link.link_type.value] }}: {{ display_name(link.link_value) if link.link_type.value == "player" else link.link_value }}</span> {% endfor %}</td>
+      <td class="actions">
+        <form method="post" action="/promos/{{ p.id }}/delete" style="margin:0"
+              onsubmit="return confirm('Promo „{{ p.name }}“ löschen?')">
+          <button type="submit" class="contrast outline">Löschen</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h3>Leak-Eingang</h3>
+<p class="muted"><small>Aus RSS-Feeds (FIFA UTeam, RealSport101), alle 6 Stunden. Übernehmen öffnet die Promo-Erfassung mit dem Text.</small></p>
+{% if not inbox %}
+  <p class="muted">Keine neuen Einträge.</p>
+{% else %}
+<div class="overflow-auto">
+<table>
+  <tbody>
+  {% for item in inbox %}
+    <tr>
+      <td class="nowrap muted">{{ item.published_at | dt }}</td>
+      <td>{% if item.is_leak %}<span class="badge warn">Leak</span> {% endif %}<a href="{{ item.url }}" target="_blank" rel="noreferrer">{{ item.title }}</a>
+        <br><small class="muted">{{ item.source }}</small></td>
+      <td class="actions">
+        <a href="/promos/new?leak={{ item.id }}" role="button" class="secondary outline">Übernehmen</a>
+        <form method="post" action="/promos/leaks/{{ item.id }}/dismiss" style="display:inline;margin:0">
+          <button type="submit" class="contrast outline">Verwerfen</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

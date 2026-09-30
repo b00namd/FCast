@@ -98,6 +98,22 @@ class Settings(BaseSettings):
     # How many top candidates get their FC card looked up on FUTBIN per week.
     totw_card_lookups: int = Field(default=10, ge=0, le=30)
 
+    # --- Leak & promo radar ---
+    # RSS feeds for the leak inbox as "name=url" pairs (robots.txt checked per feed).
+    leak_feeds: str = (
+        "fifauteam=https://fifauteam.com/feed/,realsport101=https://realsport101.com/feed.xml"
+    )
+    # Candidate pool: cards from promo leaks are priced every `pool_interval_h` hours,
+    # at most `pool_per_run` cards per collector run (spreads the requests out).
+    pool_interval_h: float = Field(default=12.0, ge=1)
+    pool_per_run: int = Field(default=4, ge=0, le=50)
+    # Link scoring: strength of a shared player/club/league/nation with leaked cards.
+    promo_weight_player: float = Field(default=1.0, ge=0, le=1)
+    promo_weight_club: float = Field(default=0.6, ge=0, le=1)
+    promo_weight_league: float = Field(default=0.35, ge=0, le=1)
+    promo_weight_nation: float = Field(default=0.3, ge=0, le=1)
+    promo_prebuy_threshold: float = Field(default=45.0, ge=0, le=100)
+
     # Web dashboard (Basic Auth). The dashboard refuses to start without a password.
     web_user: str = "fcast"
     web_password: SecretStr | None = None

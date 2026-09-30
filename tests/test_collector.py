@@ -411,3 +411,14 @@ async def test_extinct_stops_fallback_and_is_tracked(factory: sessionmaker[Sessi
     state = market_state(factory, 1)
     assert state is not None
     assert state.extinct_since is None
+
+
+async def test_extra_cards_are_collected_like_watchlist_cards(
+    factory: sessionmaker[Session],
+) -> None:
+    watch(factory, 1)
+    source = FakeSource("fake", prices={1: 1000, 7: 7000})
+    result = await collect_once(factory, [source], Platform.PC, extra_ea_ids=[7, 1])
+    assert result.players == 2  # the watched card is not counted twice
+    assert sorted(source.calls) == [1, 7]
+    assert sorted(price for _, price, _ in snapshots(factory)) == [1000, 7000]

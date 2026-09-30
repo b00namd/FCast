@@ -26,12 +26,14 @@ class Rule(StrEnum):
     BUY_DIP = "BUY_DIP"
     SELL_TARGET = "SELL_TARGET"
     OVERPRICE_CHANCE = "OVERPRICE_CHANCE"
+    PROMO_PREBUY = "PROMO_PREBUY"
 
 
 RULE_LABELS = {
     Rule.BUY_DIP: "Kauf-Dip",
     Rule.SELL_TARGET: "Verkaufsziel",
     Rule.OVERPRICE_CHANCE: "ÜV-Chance",
+    Rule.PROMO_PREBUY: "Promo-Vorkauf",
 }
 
 

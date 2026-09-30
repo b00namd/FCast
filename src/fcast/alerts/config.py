@@ -28,6 +28,7 @@ class AlertConfig:
     overprice: bool = True
     system: bool = True  # source paused, collection failed
     totw: bool = True  # TOTW candidates before the weekly release
+    promo: bool = True  # PROMO_PREBUY: cards linked to an upcoming promo
 
     @classmethod
     def defaults(cls, settings: Settings) -> "AlertConfig":

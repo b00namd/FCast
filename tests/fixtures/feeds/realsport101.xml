@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:snf="http://www.smartnews.be/snf" xmlns:media="http://search.yahoo.com/mrss/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>RealSport101</title>
+        <link>https://realsport101.com/</link>
+        <description>Latest articles on RealSport101</description>
+        <lastBuildDate>Wed, 30 Sep 2026 18:21:04 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/nuxt-community/feed-module</generator>
+        <language>en</language>
+        <ttl>15</ttl>
+        <image>
+            <title>RealSport101</title>
+            <url>https://gdm-universal-media.b-cdn.net/realsport-production/rss-rs101-light.png?width=700&amp;height=100</url>
+            <link>https://realsport101.com/</link>
+        </image>
+        <category>Other games</category>
+        <category>EA Sports FC</category>
+        <category>News</category>
+        <category>NBA 2K</category>
+        <category>Reviews</category>
+        <category>eFootball</category>
+        <category>Football Manager</category>
+        <category>Sports</category>
+        <category>Madden</category>
+        <atom:link href="https://realsport101.com/feed.xml" rel="self" type="application/rss+xml"/>
+        <snf:logo>
+            <url>https://gdm-universal-media.b-cdn.net/realsport-production/rss-rs101-light.png?width=700&amp;height=100</url>
+        </snf:logo>
+        <snf:darkModeLogo>
+            <url>https://gdm-universal-media.b-cdn.net/realsport-production/rss-rs101-dark.png?width=700&amp;height=100</url>
+        </snf:darkModeLogo>
+        <item>
+            <title><![CDATA[Dronaldo: Drone Football League Steam Demo Out Now Ahead of March 2027 Launch]]></title>
+            <link>https://realsport101.com/article/dronaldo-drone-football-league-steam-demo-out-now-ahead-of-march-2027-launch</link>
+            <guid>https://realsport101.com/article/dronaldo-drone-football-league-steam-demo-out-now-ahead-of-march-2027-launch</guid>
+            <pubDate>Wed, 30 Sep 2026 13:02:12 GMT</pubDate>
+            <description><![CDATA[Try the new Dronaldo: Drone Football League Steam demo! Features upgraded drone controls, stat customization, Steam Deck support, and a March 2027 release window.]]></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <enclosure url="https://gdm-universal-media.b-cdn.net/realsport-production/9c366dbf-3ccb2f54-307a-a4a2-9ba4-0321ff7bc601-1920x1080.webp" length="0" type="image/webp"/>
+            <media:thumbnail>https://gdm-universal-media.b-cdn.net/realsport-production/9c366dbf-3ccb2f54-307a-a4a2-9ba4-0321ff7bc601-1920x1080.webp</media:thumbnail>
+            <media:status>active</media:status>
+            <dc:creator>Francisco Carrico</dc:creator>
+            <dc:language>en</dc:language>
+            <snf:advertisement>
+                <snf:sponsoredLink link="https://realsport101.com/article/fc-27-team-of-the-week-3-leaked-degaard-chawinga-lead-massive-new-squad" thumbnail="https://gdm-universal-media.b-cdn.net/realsport-production/e27f6861-fc-27-totw3.webp" title="FC 27 Team of the Week 3 Leaked: Ødegaard &amp; Chawinga Lead Massive New Squad" advertiser="RealSport101"/>
+                <snf:adcontent><![CDATA[]]></snf:adcontent>
+            </snf:advertisement>
+            <category>other,games</category>
+        </item><item>
+            <title><![CDATA[FC 27 Team of the Week 3 Leaked: Ødegaard & Chawinga Lead Massive New Squad]]></title>
+            <link>https://realsport101.com/article/fc-27-team-of-the-week-3-leaked-degaard-chawinga-lead-massive-new-squad</link>
+            <guid>https://realsport101.com/article/fc-27-team-of-the-week-3-leaked-degaard-chawinga-lead-massive-new-squad</guid>
+            <pubDate>Wed, 30 Sep 2026 12:14:07 GMT</pubDate>
+            <description><![CDATA[Check out the official FC 27 Team of the Week 3 (TOTW 3) squad! View player ratings, face stats, PlayStyles+, and release schedules.]]></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <enclosure url="https://gdm-universal-media.b-cdn.net/realsport-production/e27f6861-fc-27-totw3.webp" length="0" type="image/webp"/>
+            <media:thumbnail>https://gdm-universal-media.b-cdn.net/realsport-production/e27f6861-fc-27-totw3.webp</media:thumbnail>
+            <media:status>active</media:status>
+            <dc:creator>Aakash Regmi</dc:creator>
+            <dc:language>en</dc:language>
+            <snf:advertisement>
+                <snf:sponsoredLink link="https://realsport101.com/article/what-is-faceit-boosting-and-how-does-faceit-boost-work" thumbnail="https://gdm-universal-media.b-cdn.net/realsport-production/8f09f40e-captura-de-ecrã-2026-09-30-082905.webp" title="What is Faceit Boosting and How Does Faceit Boost Work?" advertiser="RealSport101"/>
+                <snf:adcontent><![CDATA[]]></snf:adcontent>
+            </snf:advertisement>
+            <category>ea,sports,fc</category>
+        </item><item>
+            <title><![CDATA[What is Faceit Boosting and How Does Faceit Boost Work?]]></title>
+            <link>https://realsport101.com/article/what-is-faceit-boosting-and-how-does-faceit-boost-work</link>
+            <guid>https://realsport101.com/article/what-is-faceit-boosting-and-how-does-faceit-boost-work</guid>
+            <pubDate>Wed, 30 Sep 2026 07:31:21 GMT</pubDate>
+            <description><![CDATA[Faceit boosting focuses on improving a player’s standing on Faceit]]></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <enclosure url="https://gdm-universal-media.b-cdn.net/realsport-production/8f09f40e-captura-de-ecrã-2026-09-30-082905.webp" length="0" type="image/webp"/>
+            <media:thumbnail>https://gdm-universal-media.b-cdn.net/realsport-production/8f09f40e-captura-de-ecrã-2026-09-30-082905.webp</media:thumbnail>
+            <media:status>active</media:status>
+            <dc:creator>RealSport101</dc:creator>
+            <dc:language>en</dc:language>
+            <snf:advertisement>
+                <snf:sponsoredLink link="https://realsport101.com/article/fc-27-frontline-paradox-evolution-guide-best-players-pathways" thumbnail="https://gdm-universal-media.b-cdn.net/realsport-production/8f9f0565-fc-27-frontiline-paradox-evolution.webp" title="FC 27 Frontline Paradox Evolution Guide: Best Players &amp; Pathways" advertiser="RealSport101"/>
+                <snf:adcontent><![CDATA[]]></snf:adcontent>
+            </snf:advertisement>
+            <category>news</category>
+        </item><item>
+            <title><![CDATA[FC 27 Frontline Paradox Evolution Guide: Best Players & Pathways]]></title>
+            <link>https://realsport101.com/article/fc-27-frontline-paradox-evolution-guide-best-players-pathways</link>
+            <guid>https://realsport101.com/article/fc-27-frontline-paradox-evolution-guide-best-players-pathways</guid>
+            <pubDate>Tue, 29 Sep 2026 20:22:34 GMT</pubDate>
+            <description><![CDATA[Discover the best strikers for the FC 27 Frontline Paradox Evolution! Compare level-by-level stats and choose between Options A, B, and C.]]></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <enclosure url="https://gdm-universal-media.b-cdn.net/realsport-production/8f9f0565-fc-27-frontiline-paradox-evolution.webp" length="0" type="image/webp"/>
+            <media:thumbnail>https://gdm-universal-media.b-cdn.net/realsport-production/8f9f0565-fc-27-frontiline-paradox-evolution.webp</media:thumbnail>
+            <media:status>active</media:status>
+            <dc:creator>Aakash Regmi</dc:creator>
+            <dc:language>en</dc:language>
+            <snf:advertisement>
+                <snf:sponsoredLink link="https://realsport101.com/article/fc-27-red-bull-wings-cup-promo-how-to-get-free-sp-kits-redeem-codes" thumbnail="https://gdm-universal-media.b-cdn.net/realsport-production/4d7a611e-red-bull-wings-cup.webp" title="FC 27 Red Bull Wings Cup Promo: How to Get Free SP, Kits &amp; Redeem Codes" advertiser="RealSport101"/>
+                <snf:adcontent><![CDATA[]]></snf:adcontent>
+            </snf:advertisement>
+            <category>ea,sports,fc</category>
+        </item><item>
+            <title><![CDATA[FC 27 Red Bull Wings Cup Promo: How to Get Free SP, Kits & Redeem Codes]]></title>
+            <link>https://realsport101.com/article/fc-27-red-bull-wings-cup-promo-how-to-get-free-sp-kits-redeem-codes</link>
+            <guid>https://realsport101.com/article/fc-27-red-bull-wings-cup-promo-how-to-get-free-sp-kits-redeem-codes</guid>
+            <pubDate>Tue, 29 Sep 2026 20:03:40 GMT</pubDate>
+            <description><![CDATA[Level up fast in FC 27 Season 1 with the Red Bull Wings Cup promotion! Learn how to redeem can tab codes for 1,000 SP, player loans, and custom kits.]]></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <enclosure url="https://gdm-universal-media.b-cdn.net/realsport-production/4d7a611e-red-bull-wings-cup.webp" length="0" type="image/webp"/>
+            <media:thumbnail>https://gdm-universal-media.b-cdn.net/realsport-production/4d7a611e-red-bull-wings-cup.webp</media:thumbnail>
+            <media:status>active</media:status>
+            <dc:creator>Aakash Regmi</dc:creator>
+            <dc:language>en</dc:language>
+            <snf:advertisement>
+                <snf:sponsoredLink link="https://realsport101.com/article/mlb-9-innings-rivals-26-launches-massive-2026-mlb-postseason-promotion" thumbnail="https://gdm-universal-media.b-cdn.net/realsport-production/10aa4267-33d3d6bd-3129-46be-9d79-c7fe362de6ef-1920x1080.webp" title="MLB 9 Innings Rivals 26 Launches Massive 2026 MLB Postseason Promotion" advertiser="RealSport101"/>
+                <snf:adcontent><![CDATA[]]></snf:adcontent>
+            </snf:advertisement>
+            <category>ea,sports,fc</category>
+        </item><item>
+            <title><![CDATA[MLB 9 Innings Rivals 26 Launches Massive 2026 MLB Postseason Promotion]]></title>
+            <link>https://realsport101.com/article/mlb-9-innings-rivals-26-launches-massive-2026-mlb-postseason-promotion</link>
+            <guid>https://realsport101.com/article/mlb-9-innings-rivals-26-launches-massive-2026-mlb-postseason-promotion</guid>
+            <pubDate>Tue, 29 Sep 2026 15:42:10 GMT</pubDate>
+            <description><![CDATA[Celebrate the 2026 MLB Postseason with MLB 9 Innings Rivals 26! Enjoy Playoff Pick'Ems, Event Workshops, Signature Black RP cards, and Ranked Battle upgrades.]]></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <enclosure url="https://gdm-universal-media.b-cdn.net/realsport-production/10aa4267-33d3d6bd-3129-46be-9d79-c7fe362de6ef-1920x1080.webp" length="0" type="image/webp"/>
+            <media:thumbnail>https://gdm-universal-media.b-cdn.net/realsport-production/10aa4267-33d3d6bd-3129-46be-9d79-c7fe362de6ef-1920x1080.webp</media:thumbnail>
+            <media:status>active</media:status>
+            <dc:creator>Francisco Carrico</dc:creator>
+            <dc:language>en</dc:language>
+            <snf:advertisement>
+                <snf:sponsoredLink link="https://realsport101.com/article/fc-27-pivot-shift-evolution-guide-best-players-requirements-upgrades" thumbnail="https://gdm-universal-media.b-cdn.net/realsport-production/eca846c6-fc-27-pivot-shift-evolution.webp" title="FC 27 Pivot Shift Evolution Guide: Best Players, Requirements &amp; Upgrades" advertiser="RealSport101"/>
+                <snf:adcontent><![CDATA[]]></snf:adcontent>
+            </snf:advertisement>
+            <category>other,games</category>
+        </item><item>
+            <title><![CDATA[FC 27 Pivot Shift Evolution Guide: Best Players, Requirements & Upgrades]]></title>
+            <link>https://realsport101.com/article/fc-27-pivot-shift-evolution-guide-best-players-requirements-upgrades</link>
+            <guid>https://realsport101.com/article/fc-27-pivot-shift-evolution-guide-best-players-requirements-upgrades</guid>
+            <pubDate>Tue, 29 Sep 2026 11:38:39 GMT</pubDate>
+            <description><![CDATA[Discover the best players for the FC 27 Pivot Shift Evolution! Compare requirements, level-by-level stats, and choose between Option A and Option B.]]></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <enclosure url="https://gdm-universal-media.b-cdn.net/realsport-production/eca846c6-fc-27-pivot-shift-evolution.webp" length="0" type="image/webp"/>
+            <media:thumbnail>https://gdm-universal-media.b-cdn.net/realsport-production/eca846c6-fc-27-pivot-shift-evolution.webp</media:thumbnail>
+            <media:status>active</media:status>
+            <dc:creator>Aakash Regmi</dc:creator>
+            <dc:language>en</dc:language>
+            <snf:advertisement>
+                <snf:sponsoredLink link="https://realsport101.com/article/fc-27-destined-for-glory-team-2-leaked-erling-haaland-headlines-stacked-squad" thumbnail="https://gdm-universal-media.b-cdn.net/realsport-production/fdec942c-fc-27-destined-for-glory-team2.webp" title="FC 27 Destined for Glory Team 2 Leaked: Erling Haaland Headlines Stacked Squad" advertiser="RealSport101"/>
+                <snf:adcontent><![CDATA[]]></snf:adcontent>
+            </snf:advertisement>
+            <category>ea,sports,fc</category>
+        </item><item>
+            <title><![CDATA[FC 27 Destined for Glory Team 2 Leaked: Erling Haaland Headlines Stacked Squad]]></title>
+            <link>https://realsport101.com/article/fc-27-destined-for-glory-team-2-leaked-erling-haaland-headlines-stacked-squad</link>
+            <guid>https://realsport101.com/article/fc-27-destined-for-glory-team-2-leaked-erling-haaland-headlines-stacked-squad</guid>
+            <pubDate>Mon, 28 Sep 2026 17:02:12 GMT</pubDate>
+            <description><![CDATA[Check out the leaked FC 27 Destined For Glory Team 2 lineup! Discover stats, confirmed stars like Erling Haaland and Bryan Mbeumo, and release times.]]></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <enclosure url="https://gdm-universal-media.b-cdn.net/realsport-production/fdec942c-fc-27-destined-for-glory-team2.webp" length="0" type="image/webp"/>
+            <media:thumbnail>https://gdm-universal-media.b-cdn.net/realsport-production/fdec942c-fc-27-destined-for-glory-team2.webp</media:thumbnail>
+            <media:status>active</media:status>
+            <dc:creator>Aakash Regmi</dc:creator>
+            <dc:language>en</dc:language>
+            <snf:advertisement>
+                <snf:sponsoredLink link="https://realsport101.com/article/nba-2k27-2ktv-episode-4-answers-complete-trivia-list" thumbnail="https://gdm-universal-media.b-cdn.net/realsport-production/16f8d4ec-n27-all-csr_mp-builder_introducing_female_myplayers_1920x1080.webp" title="NBA 2K27 2KTV Episode 4 Answers: Complete Trivia List" advertiser="RealSport101"/>
+                <snf:adcontent><![CDATA[]]></snf:adcontent>
+            </snf:advertisement>
+            <category>ea,sports,fc</category>
+        </item><item>
+            <title><![CDATA[NBA 2K27 2KTV Episode 4 Answers: Complete Trivia List]]></title>
+            <link>https://realsport101.com/article/nba-2k27-2ktv-episode-4-answers-complete-trivia-list</link>
+            <guid>https://realsport101.com/article/nba-2k27-2ktv-episode-4-answers-complete-trivia-list</guid>
+            <pubDate>Mon, 28 Sep 2026 11:32:07 GMT</pubDate>
+            <description><![CDATA[Get all the answers for NBA 2K27 2KTV Episode 4! Farm VC easily with our complete guide to trivia questions, WNBA insights, and badge queries.]]></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <enclosure url="https://gdm-universal-media.b-cdn.net/realsport-production/16f8d4ec-n27-all-csr_mp-builder_introducing_female_myplayers_1920x1080.webp" length="0" type="image/webp"/>
+            <media:thumbnail>https://gdm-universal-media.b-cdn.net/realsport-production/16f8d4ec-n27-all-csr_mp-builder_introducing_female_myplayers_1920x1080.webp</media:thumbnail>
+            <media:status>active</media:status>
+            <dc:creator>Aakash Regmi</dc:creator>
+            <dc:language>en</dc:language>
+            <snf:advertisement>
+                <snf:sponsoredLink link="https://realsport101.com/article/how-to-level-up-fast-in-fc-27-season-1-complete-sp-guide" thumbnail="https://gdm-universal-media.b-cdn.net/realsport-production/561a441d-fc-27-season-1-sp-guide.webp" title="How to Level Up Fast in FC 27 Season 1: Complete SP Guide" advertiser="RealSport101"/>
+                <snf:adcontent><![CDATA[]]></snf:adcontent>
+            </snf:advertisement>
+            <category>nba,2k</category>
+        </item><item>
+            <title><![CDATA[How to Level Up Fast in FC 27 Season 1: Complete SP Guide]]></title>
+            <link>https://realsport101.com/article/how-to-level-up-fast-in-fc-27-season-1-complete-sp-guide</link>
+            <guid>https://realsport101.com/article/how-to-level-up-fast-in-fc-27-season-1-complete-sp-guide</guid>
+            <pubDate>Mon, 28 Sep 2026 11:23:09 GMT</pubDate>
+            <description><![CDATA[evel up fast in FC 27 Season 1! Discover the best SP-yielding Ultimate Team objectives, campaign challenges, and weekly grind strategies.]]></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <enclosure url="https://gdm-universal-media.b-cdn.net/realsport-production/561a441d-fc-27-season-1-sp-guide.webp" length="0" type="image/webp"/>
+            <media:thumbnail>https://gdm-universal-media.b-cdn.net/realsport-production/561a441d-fc-27-season-1-sp-guide.webp</media:thumbnail>
+            <media:status>active</media:status>
+            <dc:creator>Aakash Regmi</dc:creator>
+            <dc:language>en</dc:language>
+            <snf:advertisement>
+                <snf:sponsoredLink link="https://realsport101.com/article/fc-27-best-center-back-build-best-setup-playstyles-attributes" thumbnail="https://gdm-universal-media.b-cdn.net/realsport-production/96c48463-fc-27-the-grounds.webp" title="FC 27 Best Center-Back Build: Best Setup, PlayStyles+ &amp; Attributes" advertiser="RealSport101"/>
+                <snf:adcontent><![CDATA[]]></snf:adcontent>
+            </snf:advertisement>
+            <category>ea,sports,fc</category>
+        </item><item>
+            <title><![CDATA[FC 27 Best Center-Back Build: Best Setup, PlayStyles+ & Attributes]]></title>
+            <link>https://realsport101.com/article/fc-27-best-center-back-build-best-setup-playstyles-attributes</link>
+            <guid>https://realsport101.com/article/fc-27-best-center-back-build-best-setup-playstyles-attributes</guid>
+            <pubDate>Fri, 25 Sep 2026 17:03:21 GMT</pubDate>
+            <description><![CDATA[Build the ultimate center-back in FC 27 Clubs and The Grounds. Discover the best CB archetype (Boss), height, weight, PlayStyles+, and attributes.]]></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <enclosure url="https://gdm-universal-media.b-cdn.net/realsport-production/96c48463-fc-27-the-grounds.webp" length="0" type="image/webp"/>
+            <media:thumbnail>https://gdm-universal-media.b-cdn.net/realsport-production/96c48463-fc-27-the-grounds.webp</media:thumbnail>
+            <media:status>active</media:status>
+            <dc:creator>Aakash Regmi</dc:creator>
+            <dc:language>en</dc:language>
+            <snf:advertisement>
+                <snf:sponsoredLink link="https://realsport101.com/article/fc-27-destined-for-glory-team-1-sbc-objective-leaks-nusa-veiga-frattesi" thumbnail="https://gdm-universal-media.b-cdn.net/realsport-production/887f07ad-destined-for-glory-t1-sbc-&amp;-obj.webp" title="FC 27 Destined For Glory Team 1 SBC &amp; Objective Leaks: Nusa, Veiga &amp; Frattesi" advertiser="RealSport101"/>
+                <snf:adcontent><![CDATA[]]></snf:adcontent>
+            </snf:advertisement>
+            <category>ea,sports,fc</category>
+        </item><item>
+            <title><![CDATA[FC 27 Destined For Glory Team 1 SBC & Objective Leaks: Nusa, Veiga & Frattesi]]></title>
+            <link>https://realsport101.com/article/fc-27-destined-for-glory-team-1-sbc-objective-leaks-nusa-veiga-frattesi</link>
+            <guid>https://realsport101.com/article/fc-27-destined-for-glory-team-1-sbc-objective-leaks-nusa-veiga-frattesi</guid>
+            <pubDate>Fri, 25 Sep 2026 16:41:43 GMT</pubDate>
+            <description><![CDATA[Check out the leaked FC 27 Destined for Glory Team 1 SBC and Objective players! Explore ratings and stats breakdown for Nusa, Veiga, and Frattesi.]]></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <enclosure url="https://gdm-universal-media.b-cdn.net/realsport-production/887f07ad-destined-for-glory-t1-sbc-&amp;-obj.webp" length="0" type="image/webp"/>
+            <media:thumbnail>https://gdm-universal-media.b-cdn.net/realsport-production/887f07ad-destined-for-glory-t1-sbc-&amp;-obj.webp</media:thumbnail>
+            <media:status>active</media:status>
+            <dc:creator>Aakash Regmi</dc:creator>
+            <dc:language>en</dc:language>
+            <snf:advertisement>
+                <snf:sponsoredLink link="https://realsport101.com/article/fc-27-best-playstyles-top-meta-ps-for-every-position-role" thumbnail="https://gdm-universal-media.b-cdn.net/realsport-production/161a2856-fc-27-playstyles-ranked.webp" title="FC 27 Best PlayStyles+: Top Meta PS for Every Position &amp; Role" advertiser="RealSport101"/>
+                <snf:adcontent><![CDATA[]]></snf:adcontent>
+            </snf:advertisement>
+            <category>ea,sports,fc</category>
+        </item>
+</channel>
+</rss>

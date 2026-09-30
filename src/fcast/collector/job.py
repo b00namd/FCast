@@ -218,6 +218,7 @@ async def collect_once(
     rotate: bool = False,
     pause: timedelta = DEFAULT_PAUSE,
     outlier_gap_pct: float = 15.0,
+    extra_ea_ids: Sequence[int] = (),
 ) -> CollectResult:
     """Collect prices for all active watchlist players.
 
@@ -232,6 +233,12 @@ async def collect_once(
             (entry.player.ea_id, entry.player.name is None)
             for entry in repo.list_watchlist(session, active_only=True)
         ]
+        # Extra cards (e.g. the promo candidate pool) are priced like watchlist cards.
+        watched = {ea_id for ea_id, _ in targets}
+        for ea_id in extra_ea_ids:
+            if ea_id not in watched:
+                player = repo.get_player_by_ea_id(session, ea_id)
+                targets.append((ea_id, player is None or player.name is None))
     result.skipped = sorted(source.name for source in sources if source.name in paused_now)
     for name in result.skipped:
         logger.info("%s is paused, skipping it", name)

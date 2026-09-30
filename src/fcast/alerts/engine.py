@@ -74,6 +74,7 @@ _STYLE = {
     sig.Rule.BUY_DIP: (Priority.HIGH, "chart_with_downwards_trend"),
     sig.Rule.OVERPRICE_CHANCE: (Priority.HIGH, "moneybag"),
     sig.Rule.SELL_TARGET: (Priority.DEFAULT, "dart"),
+    sig.Rule.PROMO_PREBUY: (Priority.HIGH, "crystal_ball"),
 }
 
 
@@ -83,6 +84,8 @@ def signal_notification(
     lines = [f"Preis {_coins(signal.price)} (Ø 7 Tage {_coins(signal.reference)})"]
     if signal.rule is sig.Rule.BUY_DIP:
         lines.append(f"Kaufen bis max. {_coins(signal.recommended)}")
+    elif signal.rule is sig.Rule.PROMO_PREBUY:
+        lines.append("Vor dem Promo-Start kaufen, nach dem Start teurer verkaufen")
     else:
         lines.append(f"Einstellen zu {_coins(signal.recommended)}")
     if signal.expected_profit is not None:
@@ -209,6 +212,7 @@ class AlertEngine:
             sig.Rule.BUY_DIP.value: config.buy_dip,
             sig.Rule.SELL_TARGET.value: config.sell_target,
             sig.Rule.OVERPRICE_CHANCE.value: config.overprice,
+            sig.Rule.PROMO_PREBUY.value: config.promo,
         }.get(candidate.rule, True)
 
     def evaluate(

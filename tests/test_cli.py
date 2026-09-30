@@ -250,3 +250,29 @@ def test_watch_add_with_only_futbin_link(db_path: Path, monkeypatch: pytest.Monk
     assert "belongs to card 50579475" in mismatch.output
 
     assert runner.invoke(app, ["watch", "add"]).exit_code != 0
+
+
+def test_promo_add_and_list(db_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "promo", "add", "Future Stars", "--start", "2030-10-09", "--end", "2030-10-16",
+            "--player", "Michael Olise", "--league", "Bundesliga", "--confidence", "0.8",
+        ],
+    )  # fmt: skip
+    assert result.exit_code == 0, result.output
+    assert "saved with 2 link(s)" in result.output
+    assert "Future Stars" in runner.invoke(app, ["promo", "list"]).output
+    from fcast.db import repositories as repo
+    from fcast.db.session import create_db_engine, create_session_factory
+
+    engine = create_db_engine(get_settings().db_url)
+    with create_session_factory(engine)() as session:
+        (promo,) = repo.list_promos(session)
+        links = {(link.link_type.value, link.link_value) for link in promo.links}
+    engine.dispose()
+    assert links == {("player", "michael-olise"), ("league", "Bundesliga")}
+    assert runner.invoke(app, ["promo", "add", "X", "--start", "2030-01-01"]).exit_code != 0
+    assert (
+        runner.invoke(app, ["promo", "add", "X", "--start", "bad", "--league", "L"]).exit_code != 0
+    )

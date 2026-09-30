@@ -301,3 +301,41 @@ class TotwActual(Base):
     futbin_id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(120))
     name: Mapped[str] = mapped_column(String(120))
+
+
+class LeakItem(Base):
+    """An article from a leak/news feed, waiting to be turned into a promo or dismissed."""
+
+    __tablename__ = "leak_items"
+    __table_args__ = (
+        UniqueConstraint("source", "guid", name="uq_leak_items_source_guid"),
+        Index("ix_leak_items_published_at", "published_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(32))
+    guid: Mapped[str] = mapped_column(String(300))
+    title: Mapped[str] = mapped_column(String(300))
+    url: Mapped[str] = mapped_column(String(500))
+    published_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    summary: Mapped[str] = mapped_column(String(1000), default="")
+    is_leak: Mapped[bool] = mapped_column(default=False)
+    status: Mapped[str] = mapped_column(String(16), default="new")  # new, used, dismissed
+    promo_id: Mapped[int | None] = mapped_column(ForeignKey("promos.id", ondelete="SET NULL"))
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class PoolCard(Base):
+    """A card tracked because of a promo (less often than the watchlist) until `until`."""
+
+    __tablename__ = "pool_cards"
+
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.id", ondelete="CASCADE"), primary_key=True
+    )
+    promo_id: Mapped[int | None] = mapped_column(ForeignKey("promos.id", ondelete="CASCADE"))
+    reason: Mapped[str] = mapped_column(String(200))
+    added_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    until: Mapped[datetime] = mapped_column(UTCDateTime)
+
+    player: Mapped[Player] = relationship()

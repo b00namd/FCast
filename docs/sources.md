@@ -76,3 +76,14 @@ Erst danach wird der jeweilige Adapter gebaut – mit den Auflagen als Konfigura
 | FotMob | ❌ | robots.txt sperrt `/api/*`. |
 | SofaScore, ESPN, Kicker | ❌ | Blocken automatisierte Abrufe (403). |
 | Understat | ❌ | robots.txt sperrt alles. |
+
+## Leak-Quellen (Stand 30.09.2026)
+
+| Quelle | Status | Grund |
+|---|---|---|
+| FIFA UTeam RSS (`fifauteam.com/feed/`) | ✅ eingebaut | robots.txt erlaubt alles; RSS ist für Feed-Reader gedacht. |
+| RealSport101 RSS (`realsport101.com/feed.xml`) | ✅ eingebaut | robots.txt erlaubt alles; FC-Artikel werden herausgefiltert. |
+| FUTBIN News | ⚠️ ungeeignet | News-Sitemap leer, Kategorie „Promo News“ veraltet. |
+| FUT.GG News | ⏸ möglich | HTML-Liste, robots.txt erlaubt `/news/`; später ergänzbar. |
+| X/Twitter | ❌ | Ohne Login nicht lesbar (402); nur manuell über das Formular. |
+| Reddit | ❌ | API nur mit Freigabe (Responsible Builder Policy). |

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Neue Promo{% endblock %}
+{% block content %}
+<h2>Neue Promo erfassen</h2>
+{% if errors %}
+  <div class="message error" role="alert">{% for e in errors %}<div>{{ e }}</div>{% endfor %}</div>
+{% endif %}
+
+<form method="post" action="/promos/new" class="form-card">
+  <input type="hidden" name="leak_id" value="{{ form.leak_id or '' }}">
+  <label>Leak-Text <small>(Tweet, Überschrift, Artikel – FCast erkennt Spieler, Ligen, Nationen, Vereine)</small>
+    <textarea name="text" rows="5" placeholder="z. B. FC 27 Future Stars leaked: Yamal, Mainoo, Zaïre-Emery …">{{ form.text or '' }}</textarea>
+  </label>
+  <div class="form-actions">
+    <button type="submit" name="action" value="analyze" class="secondary outline">Text analysieren</button>
+  </div>
+
+  {% if detection %}
+    {% if detection.empty %}
+      <p class="muted">Nichts erkannt. Trag Spieler, Ligen, Nationen oder Vereine unten von Hand ein.</p>
+    {% else %}
+    <fieldset>
+      <legend>Erkannt – Haken entfernen, was nicht passt</legend>
+      {% for slug in detection.players %}
+        <label><input type="checkbox" name="player" value="{{ slug }}" checked> Spieler: {{ display_name(slug) }}</label>
+      {% endfor %}
+      {% for value in detection.leagues %}
+        <label><input type="checkbox" name="league" value="{{ value }}" checked> Liga: {{ value }}</label>
+      {% endfor %}
+      {% for value in detection.nations %}
+        <label><input type="checkbox" name="nation" value="{{ value }}" checked> Nation: {{ value }}</label>
+      {% endfor %}
+      {% for value in detection.clubs %}
+        <label><input type="checkbox" name="club" value="{{ value }}" checked> Verein: {{ value }}</label>
+      {% endfor %}
+    </fieldset>
+    {% endif %}
+  {% endif %}
+
+  <div class="grid">
+    <label>Weitere Spieler <small>(kommagetrennt, voller Name)</small>
+      <input name="extra_players" value="{{ form.extra_players or '' }}" placeholder="Lamine Yamal, Kobbie Mainoo">
+    </label>
+    <label>Weitere Vereine
+      <input name="extra_clubs" value="{{ form.extra_clubs or '' }}" placeholder="FC Barcelona">
+    </label>
+  </div>
+  <div class="grid">
+    <label>Weitere Ligen
+      <input name="extra_leagues" value="{{ form.extra_leagues or '' }}" placeholder="Premier League">
+    </label>
+    <label>Weitere Nationen
+      <input name="extra_nations" value="{{ form.extra_nations or '' }}" placeholder="Spain">
+    </label>
+  </div>
+
+  <label>Name der Promo
+    <input name="name" required value="{{ form.name or '' }}" placeholder="Future Stars">
+  </label>
+  <div class="grid">
+    <label>Start (Tag, Release 19:00)
+      <input name="start" type="date" value="{{ form.start or '' }}">
+    </label>
+    <label>Ende <small>(optional)</small>
+      <input name="end" type="date" value="{{ form.end or '' }}">
+    </label>
+    <label>Wie sicher ist der Leak?
+      <select name="confidence">
+        {% for value, label in confidences %}
+          <option value="{{ value }}" {% if form.confidence == value | string %}selected{% endif %}>{{ label }} ({{ (value * 100) | int }} %)</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <label>Quelle <small>(Link)</small>
+    <input name="source" value="{{ form.source or '' }}">
+  </label>
+  <div class="form-actions">
+    <button type="submit" name="action" value="save">Promo speichern</button>
+    <a href="/promos" class="secondary">Abbrechen</a>
+  </div>
+</form>
+{% endblock %}

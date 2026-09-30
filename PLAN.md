@@ -58,7 +58,7 @@ Einstellungen, Verlauf und Test-Push; CLI `fcast alert test|check`.
 
 ---
 
-## Phase 6 – Leak- & Promo-Radar
+## ✅ Phase 6 – Leak- & Promo-Radar (erledigt, ohne Reddit)
 **Aufgaben**
 - **Leak-Eingang:** Einträge aus erlaubten Quellen sammeln – offizielle Reddit-API (Posts mit
   Leak-Bezug), RSS-Feeds von FUT-News-Seiten (je Quelle vorher prüfen, Ergebnis in

@@ -517,3 +517,76 @@ def alert_check() -> None:
     for candidate, outcome in report.decisions:
         table.add_row(outcome.value, candidate.rule, candidate.notification.title)
     console.print(table)
+
+
+promo_app = typer.Typer(help="Leak & promo radar.", no_args_is_help=True)
+app.add_typer(promo_app, name="promo")
+
+
+@promo_app.command("add")
+def promo_add(
+    name: Annotated[str, typer.Argument(help="Promo name, e.g. 'Future Stars'.")],
+    start: Annotated[str, typer.Option("--start", help="Start day YYYY-MM-DD (release 19:00).")],
+    end: Annotated[str | None, typer.Option("--end", help="End day YYYY-MM-DD.")] = None,
+    confidence: Annotated[float, typer.Option("--confidence", min=0, max=1)] = 0.7,
+    player: Annotated[list[str] | None, typer.Option("--player", help="Full player name.")] = None,
+    club: Annotated[list[str] | None, typer.Option("--club")] = None,
+    league: Annotated[list[str] | None, typer.Option("--league")] = None,
+    nation: Annotated[list[str] | None, typer.Option("--nation")] = None,
+    source: Annotated[str | None, typer.Option("--source", help="Link to the leak.")] = None,
+) -> None:
+    """Record a promo leak with the players, clubs, leagues and nations it concerns."""
+    from datetime import UTC, date, datetime, time
+
+    from fcast.db.models import LinkType
+    from fcast.promos import service as promo_service
+    from fcast.sources.futbin_locator import slugify
+
+    settings = get_settings()
+
+    def day(value: str) -> datetime:
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError as exc:
+            raise typer.BadParameter(f"expected YYYY-MM-DD, got {value}") from exc
+        return datetime.combine(parsed, time(19, 0), tzinfo=settings.tz).astimezone(UTC)
+
+    links = [(LinkType.PLAYER, slugify(p)) for p in player or []]
+    links += [(LinkType.CLUB, c) for c in club or []]
+    links += [(LinkType.LEAGUE, lg) for lg in league or []]
+    links += [(LinkType.NATION, n) for n in nation or []]
+    if not links:
+        raise typer.BadParameter("give at least one --player, --club, --league or --nation")
+    with _db_session() as session:
+        promo = promo_service.create_promo(
+            session, name, day(start), day(end) if end else None, confidence, source, None, links
+        )
+        typer.echo(f"Promo {promo.id} '{promo.name}' saved with {len(links)} link(s).")
+
+
+@promo_app.command("list")
+def promo_list() -> None:
+    """Upcoming and running promos."""
+    from fcast.db import repositories as repo
+    from fcast.db.base import utcnow
+
+    now = utcnow()
+    with _db_session() as session:
+        promos = [p for p in repo.list_promos(session) if p.ends_at is None or p.ends_at >= now]
+        if not promos:
+            typer.echo("Keine Promos.")
+            return
+        table = Table(title="Promos")
+        for column in ("ID", "Name", "Start", "Ende", "Konfidenz", "Bezug"):
+            table.add_column(column)
+        tz = get_settings().tz
+        for p in promos:
+            table.add_row(
+                str(p.id),
+                p.name,
+                p.starts_at.astimezone(tz).strftime("%d.%m. %H:%M"),
+                p.ends_at.astimezone(tz).strftime("%d.%m.") if p.ends_at else "-",
+                f"{p.confidence:.0%}",
+                ", ".join(f"{link.link_type.value}:{link.link_value}" for link in p.links),
+            )
+        console.print(table)

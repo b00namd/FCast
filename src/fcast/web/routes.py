@@ -4,6 +4,7 @@ import asyncio
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -20,11 +21,12 @@ from fcast.collector.service import JOB_ID, Collector
 from fcast.config import Platform, Settings, is_clock_time
 from fcast.db import repositories as repo
 from fcast.db.base import utcnow
-from fcast.db.models import Player, TotwActual, TotwPrediction
+from fcast.db.models import LeakItem, LinkType, Player, Promo, TotwActual, TotwPrediction
 from fcast.db.session import session_scope
+from fcast.promos import service as promo_service
 from fcast.sources import futbin
 from fcast.sources.base import PlayerInfo, PlayerNotFoundError, SourceError
-from fcast.sources.futbin_locator import name_hints_from_futgg
+from fcast.sources.futbin_locator import name_hints_from_futgg, slugify
 from fcast.sources.registry import make_http_client
 from fcast.totw.openligadb import LEAGUE_NAMES
 from fcast.totw.service import hit_rate
@@ -548,6 +550,7 @@ def alerts_save(
     overprice: OptionalFormStr = None,
     system: OptionalFormStr = None,
     totw: OptionalFormStr = None,
+    promo: OptionalFormStr = None,
 ) -> HTMLResponse:
     errors: list[str] = []
     try:
@@ -578,6 +581,7 @@ def alerts_save(
         overprice=overprice is not None,
         system=system is not None,
         totw=totw is not None,
+        promo=promo is not None,
     )
     with _db(request) as session:
         save_alert_config(session, config)
@@ -651,3 +655,195 @@ async def totw_refresh(request: Request) -> Response:
         tasks.add(task)
         task.add_done_callback(tasks.discard)
     return RedirectResponse("/totw?started=1", status_code=303)
+
+
+# --- leak & promo radar ------------------------------------------------------------
+
+CONFIDENCE_CHOICES = (
+    (0.9, "sehr sicher"),
+    (0.7, "wahrscheinlich"),
+    (0.5, "Gerücht"),
+    (0.3, "vage"),
+)
+
+
+def _start_task(request: Request, name: str, coro: Any) -> bool:
+    tasks: set[asyncio.Task[Any]] = request.app.state.background_tasks
+    if any(not t.done() and t.get_name() == name for t in tasks):
+        coro.close()
+        return False
+    task = asyncio.create_task(coro, name=name)
+    tasks.add(task)
+    task.add_done_callback(tasks.discard)
+    return True
+
+
+def _promo_rows(session: Session, now: datetime) -> list[Promo]:
+    return [
+        promo
+        for promo in repo.list_promos(session)
+        if promo.ends_at is None or promo.ends_at >= now - timedelta(days=3)
+    ]
+
+
+@pages.get("/promos", response_class=HTMLResponse)
+def promos_page(request: Request) -> HTMLResponse:
+    settings = _settings(request)
+    now = utcnow()
+    with _db(request) as session:
+        return _render(
+            request,
+            "promos.html",
+            {
+                "inbox": promo_service.inbox(session),
+                "promos": _promo_rows(session, now),
+                "candidates": promo_service.candidates(session, settings, now)[:30],
+                "now": now,
+                "nav": "promos",
+                "message": request.query_params.get("msg"),
+            },
+        )
+
+
+@pages.post("/promos/leaks/sync", response_model=None)
+async def promos_sync(request: Request) -> Response:
+    _start_task(request, "leaks", _collector(request).refresh_leaks())
+    return RedirectResponse("/promos?msg=Feeds+werden+abgerufen", status_code=303)
+
+
+@pages.post("/promos/leaks/{leak_id}/dismiss", response_model=None)
+def promos_dismiss(request: Request, leak_id: int) -> Response:
+    with _db(request) as session:
+        leak = session.get(LeakItem, leak_id)
+        if leak is not None:
+            leak.status = "dismissed"
+    return RedirectResponse("/promos", status_code=303)
+
+
+@pages.post("/promos/{promo_id}/delete", response_model=None)
+def promos_delete(request: Request, promo_id: int) -> Response:
+    with _db(request) as session:
+        promo = session.get(Promo, promo_id)
+        if promo is not None:
+            repo.delete_promo(session, promo)
+    return RedirectResponse("/promos?msg=Promo+gel%C3%B6scht", status_code=303)
+
+
+def _new_promo_context(**extra: Any) -> dict[str, Any]:
+    return {
+        "form": {},
+        "detection": None,
+        "errors": [],
+        "confidences": CONFIDENCE_CHOICES,
+        "nav": "promos",
+    } | extra
+
+
+@pages.get("/promos/new", response_class=HTMLResponse)
+def promos_new(request: Request, leak: int | None = None) -> HTMLResponse:
+    form: dict[str, Any] = {"confidence": "0.7"}
+    if leak is not None:
+        with _db(request) as session:
+            item = session.get(LeakItem, leak)
+            if item is not None:
+                form |= {
+                    "text": f"{item.title}\n\n{item.summary}",
+                    "name": item.title[:100],
+                    "source": item.url,
+                    "leak_id": str(item.id),
+                    "confidence": "0.7" if item.is_leak else "0.5",
+                }
+    return _render(request, "promo_new.html", _new_promo_context(form=form))
+
+
+def _split(value: str | None) -> list[str]:
+    return [part.strip() for part in (value or "").replace("\n", ",").split(",") if part.strip()]
+
+
+@pages.post("/promos/new", response_model=None)
+async def promos_create(
+    request: Request,
+    action: FormStr,
+    text: OptionalFormStr = None,
+    name: OptionalFormStr = None,
+    start: OptionalFormStr = None,
+    end: OptionalFormStr = None,
+    confidence: OptionalFormStr = None,
+    source: OptionalFormStr = None,
+    leak_id: OptionalFormStr = None,
+    extra_players: OptionalFormStr = None,
+    extra_leagues: OptionalFormStr = None,
+    extra_nations: OptionalFormStr = None,
+    extra_clubs: OptionalFormStr = None,
+) -> Response:
+    form_data = await request.form()
+    form: dict[str, Any] = {
+        "text": text, "name": name, "start": start, "end": end, "confidence": confidence,
+        "source": source, "leak_id": leak_id, "extra_players": extra_players,
+        "extra_leagues": extra_leagues, "extra_nations": extra_nations, "extra_clubs": extra_clubs,
+    }  # fmt: skip
+    collector = _collector(request)
+    if action == "analyze":
+        with _db(request) as session:
+            detection = await promo_service.analyze_text(text or "", collector._futbin(), session)
+        return _render(
+            request, "promo_new.html", _new_promo_context(form=form, detection=detection)
+        )
+
+    errors: list[str] = []
+    tz = _settings(request).tz
+    starts_at = _parse_day(start, tz)
+    ends_at = _parse_day(end, tz) if end else None
+    if not (name or "").strip():
+        errors.append("Name der Promo fehlt.")
+    if starts_at is None:
+        errors.append("Startdatum fehlt oder ist ungültig.")
+    if end and ends_at is None:
+        errors.append("Enddatum ist ungültig.")
+    if starts_at and ends_at and ends_at < starts_at:
+        errors.append("Das Ende liegt vor dem Start.")
+    links: list[tuple[LinkType, str]] = []
+    for link_type, field in (
+        (LinkType.PLAYER, "player"), (LinkType.LEAGUE, "league"),
+        (LinkType.NATION, "nation"), (LinkType.CLUB, "club"),
+    ):  # fmt: skip
+        values = [str(v) for v in form_data.getlist(field)]
+        values += _split(form.get(f"extra_{field}s"))
+        for value in dict.fromkeys(values):
+            links.append((link_type, slugify(value) if link_type is LinkType.PLAYER else value))
+    if not links:
+        errors.append("Mindestens einen Spieler, eine Liga, Nation oder einen Verein wählen.")
+    if errors or starts_at is None:
+        return _render(request, "promo_new.html", _new_promo_context(form=form, errors=errors), 422)
+    try:
+        conf = min(1.0, max(0.0, float(confidence or 0.5)))
+    except ValueError:
+        conf = 0.5
+    with _db(request) as session:
+        promo = promo_service.create_promo(
+            session,
+            (name or "").strip()[:100],
+            starts_at,
+            ends_at,
+            conf,
+            (source or "").strip()[:200] or None,
+            None,
+            links,
+            leak_id=int(leak_id) if leak_id and leak_id.isdigit() else None,
+        )
+        promo_id = promo.id
+    if any(t is LinkType.PLAYER for t, _ in links):
+        _start_task(request, f"pool-{promo_id}", collector.fill_promo_pool(promo_id))
+    return RedirectResponse(
+        "/promos?msg=Promo+gespeichert.+Karten+der+Spieler+werden+im+Hintergrund+gesucht.",
+        status_code=303,
+    )
+
+
+def _parse_day(value: str | None, tz: Any) -> datetime | None:
+    """A date from the form ("2026-10-09") at the usual release time 19:00 local."""
+    try:
+        day = date.fromisoformat((value or "").strip())
+    except ValueError:
+        return None
+    return datetime.combine(day, time(19, 0), tzinfo=tz).astimezone(UTC)

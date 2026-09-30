@@ -4,6 +4,22 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Phase 6 – Leak- & Promo-Radar
+- **Leak-Eingang:** RSS-Feeds von FIFA UTeam und RealSport101 (robots.txt erlaubt, Feeds sind für
+  Reader gedacht), alle 6 h; nur FC-/Ultimate-Team-Artikel mit Promo-/Leak-Bezug, Leaks markiert.
+  XML wird mit `defusedxml` gelesen. FUTBIN-News geprüft: Sitemap leer, Promo-News veraltet.
+  Reddit bewusst weggelassen (API nur mit Freigabe).
+- **Erkennung** in Leak-Texten: Spieler über die FUTBIN-Sitemap (volle Namen und eindeutige
+  Nachnamen wie „Ødegaard“), Ligen, Nationen und Vereine über Alias-Listen; Umschrift für ø/æ/ł …
+- **Promos** im Dashboard erfassen (Text analysieren → Vorschläge bestätigen) oder per CLI
+  (`fcast promo add|list`); Löschen im Dashboard.
+- **Kandidaten-Pool:** Basiskarten geleakter Spieler werden über FUTBIN gefunden und bis 3 Tage
+  nach Promo-Ende alle 12 h bepreist (höchstens 4 Karten pro Sammellauf).
+- **Link-Scoring:** Spieler > Verein > Liga > Nation, Zeit bis Start (optimal 2–7 Tage),
+  Konfidenz, Preis vs. Ø 7 Tage, Aktivität; Gewichte in der Config (`FCAST_PROMO_*`).
+- **Signal `PROMO_PREBUY`** („Promo-Vorkauf“) in Signalen, Alerts (abschaltbar) und auf der neuen
+  Seite **Promos** (Kandidaten, Promos, Leak-Eingang).
+
 ### TOTW-Prognose (Teil von Phase 7, vorgezogen)
 - **Daten:** OpenLigaDB (offen, ohne Schlüssel) für 1., 2. und 3. Liga – Spiele, Ergebnis, Tore mit
   Torschütze, Elfmeter, Eigentor. Gespeichert in `real_matches`. API-Football geprüft: kostenloser

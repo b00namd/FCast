@@ -112,11 +112,20 @@ def current_signals(
     session: Session, settings: Settings, now: datetime, rule: sig.Rule | None = None
 ) -> list[sig.Signal]:
     """All signals for active watchlist cards, strongest first."""
+    from fcast.promos.service import prebuy_signals  # promos build on the analysis
+
     found = [
         signal
         for analysis in analyze_watchlist(session, settings, now)
         for signal in analysis.signals
         if rule is None or signal.rule == rule
     ]
-    order = {sig.Rule.BUY_DIP: 0, sig.Rule.OVERPRICE_CHANCE: 1, sig.Rule.SELL_TARGET: 2}
+    if rule in (None, sig.Rule.PROMO_PREBUY):
+        found += prebuy_signals(session, settings, now)
+    order = {
+        sig.Rule.BUY_DIP: 0,
+        sig.Rule.PROMO_PREBUY: 1,
+        sig.Rule.OVERPRICE_CHANCE: 2,
+        sig.Rule.SELL_TARGET: 3,
+    }
     return sorted(found, key=lambda s: (order[s.rule], -(s.score or 0), s.name))

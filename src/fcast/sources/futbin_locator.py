@@ -28,9 +28,20 @@ _PLAYER_URL_RE = re.compile(rf"^{re.escape(BASE_URL)}/{YEAR}/player/(\d+)/([a-z0
 _PLAYER_SITEMAP_RE = re.compile(rf"/{YEAR}/player/\d+/sitemap\.xml$")
 
 
+# Letters that Unicode does not decompose into base letter + accent. "ß" is left out on
+# purpose: FUTBIN drops it ("Pascal Groß" -> "pascal-gro").
+_TRANSLIT = str.maketrans(
+    {"ø": "o", "Ø": "O", "æ": "ae", "Æ": "AE", "đ": "d", "Đ": "D", "ł": "l", "Ł": "L",
+     "þ": "th", "Þ": "TH", "œ": "oe", "Œ": "OE",
+     chr(0x131): "i"}  # dotless i (Turkish)
+)  # fmt: skip
+
+
 def slugify(name: str) -> str:
-    """'Kylian Mbappé' -> 'kylian-mbappe' (FUTBIN URL style)."""
-    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    """'Kylian Mbappé' -> 'kylian-mbappe', 'Martin Ødegaard' -> 'martin-odegaard'."""
+    ascii_name = (
+        unicodedata.normalize("NFKD", name.translate(_TRANSLIT)).encode("ascii", "ignore").decode()
+    )
     return re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
 
 

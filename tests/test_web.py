@@ -1,7 +1,7 @@
 """Dashboard route tests with FastAPI's TestClient (no scheduler, fake price source)."""
 
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -868,3 +868,116 @@ def test_weekday_names_are_german(client: TestClient) -> None:
     format_dt = templates.env.filters["dt"]
     wednesday = datetime(2026, 9, 30, 17, 0, tzinfo=UTC)
     assert format_dt(wednesday, "%a, %d.%m. %H:%M") == "Mi, 30.09. 19:00"
+
+
+# --- leak & promo radar -----------------------------------------------------------
+
+
+def wait_until(check: Callable[[], bool], client: TestClient, timeout: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if check():
+            return True
+        client.get("/health", auth=None)  # lets background tasks run
+        time.sleep(0.05)
+    return False
+
+
+def test_promo_flow_from_leak_to_pool(client: TestClient, collector: Collector) -> None:
+    from fcast.db.models import LeakItem, PoolCard, Promo
+
+    with collector.session_factory.begin() as session:
+        leak = LeakItem(
+            source="realsport101",
+            guid="g1",
+            title="FC 27 Future Stars Leaked: Michael Olise and Maradona",
+            url="https://realsport101.com/x",
+            summary="Bayern and Argentina stars",
+            is_leak=True,
+        )
+        session.add(leak)
+        session.flush()
+        leak_id = leak.id
+
+    page = client.get("/promos").text
+    assert "FC 27 Future Stars Leaked" in page
+    form = client.get(f"/promos/new?leak={leak_id}").text
+    assert "Michael Olise and Maradona" in form
+
+    analyzed = client.post(
+        "/promos/new",
+        data={
+            "action": "analyze",
+            "text": "Future Stars leaked: Michael Olise and Maradona, Bayern",
+        },
+    ).text
+    assert 'value="michael-olise" checked' in analyzed
+    assert 'value="maradona" checked' in analyzed
+    assert 'value="FC Bayern München" checked' in analyzed
+
+    start = (datetime.now(UTC) + timedelta(days=4)).date().isoformat()
+    response = client.post(
+        "/promos/new",
+        data={
+            "action": "save",
+            "name": "Future Stars",
+            "start": start,
+            "confidence": "0.9",
+            "leak_id": str(leak_id),
+            "player": ["michael-olise"],
+            "club": ["FC Bayern München"],
+            "extra_nations": "Argentina",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    def pool_filled() -> bool:
+        with collector.session_factory() as session:
+            return session.scalar(select(PoolCard.player_id)) is not None
+
+    assert wait_until(pool_filled, client)
+    with collector.session_factory() as session:
+        promo = session.scalars(select(Promo)).one()
+        assert {link.link_value for link in promo.links} == {
+            "michael-olise",
+            "FC Bayern München",
+            "Argentina",
+        }
+        assert session.get(LeakItem, leak_id).status == "used"  # type: ignore[union-attr]
+    page = client.get("/promos").text
+    assert "Future Stars" in page
+    assert "Michael Olise (91)" in page  # pool card scored as candidate
+    assert "ist selbst im Leak" in page
+
+
+def test_promo_validation_and_actions(client: TestClient, collector: Collector) -> None:
+    from fcast.db.models import LeakItem, Promo
+
+    bad = client.post("/promos/new", data={"action": "save", "name": "", "start": "morgen"})
+    assert bad.status_code == 422
+    assert "Name der Promo fehlt" in bad.text
+    assert "Startdatum" in bad.text
+    assert "Mindestens einen Spieler" in bad.text
+
+    with collector.session_factory.begin() as session:
+        session.add(LeakItem(source="x", guid="g", title="FC 27 leak", url="https://x"))
+    with collector.session_factory() as session:
+        leak_id = session.scalars(select(LeakItem.id)).one()
+    client.post(f"/promos/leaks/{leak_id}/dismiss")
+    assert "FC 27 leak" not in client.get("/promos").text
+
+    client.post(
+        "/promos/new",
+        data={
+            "action": "save",
+            "name": "TOTW",
+            "start": "2030-01-01",
+            "extra_leagues": "Premier League",
+        },
+    )
+    with collector.session_factory() as session:
+        promo_id = session.scalars(select(Promo.id)).one()
+    client.post(f"/promos/{promo_id}/delete")
+    with collector.session_factory() as session:
+        assert session.scalars(select(Promo)).all() == []

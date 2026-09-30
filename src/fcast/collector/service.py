@@ -17,6 +17,7 @@ from fcast.db import migrate
 from fcast.db import repositories as repo
 from fcast.db.base import utcnow
 from fcast.db.session import create_db_engine, create_session_factory, session_scope
+from fcast.promos.service import due_pool_cards, fill_pool, sync_feeds
 from fcast.sources.base import PriceSource, SourceBlockedError
 from fcast.sources.futbin import FutbinSource
 from fcast.sources.registry import build_sources, make_http_client
@@ -27,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 JOB_ID = "collect"
 TOTW_JOB_ID = "totw"
+LEAKS_JOB_ID = "leaks"
+LEAKS_INTERVAL_H = 6
 TOTW_INTERVAL_H = 6
 FUTBIN = "futbin"
 DISCOVERY_PER_RUN = 3
@@ -146,6 +149,8 @@ class Collector:
         async with self._lock:  # never run two collections at the same time
             if not self.sources:
                 logger.warning("no price sources configured (FCAST_SOURCES / FCAST_MANUAL_CSV)")
+            with session_scope(self.session_factory) as session:
+                pool = due_pool_cards(session, utcnow(), self.settings)
             self.last_result = await collect_once(
                 self.session_factory,
                 self.sources,
@@ -154,6 +159,7 @@ class Collector:
                 rotate=self.settings.source_strategy == "rotate",
                 pause=timedelta(hours=self.settings.source_pause_h),
                 outlier_gap_pct=self.settings.outlier_gap_pct,
+                extra_ea_ids=pool,
             )
             self._runs += 1
             await self._send_alerts(self.last_result)
@@ -174,6 +180,28 @@ class Collector:
     def _lookup_ref(self, ea_id: int, source: str) -> str | None:
         with self.session_factory() as session:
             return repo.get_source_ref(session, ea_id, source)
+
+    async def refresh_leaks(self) -> int:
+        """Fetch the leak feeds into the inbox; never raises (runs from the scheduler)."""
+        client = make_http_client(self.settings)
+        try:
+            return await sync_feeds(client, self.session_factory, self.settings)
+        except Exception:
+            logger.exception("leak feed sync failed")
+            return 0
+        finally:
+            await client.aclose()
+
+    async def fill_promo_pool(self, promo_id: int) -> list[int]:
+        """Track the base cards of a promo's leaked players; never raises."""
+        source = self._futbin()
+        if source is None:
+            return []
+        try:
+            return await fill_pool(source, self.session_factory, promo_id, self.settings)
+        except Exception:
+            logger.exception("filling the candidate pool failed")
+            return []
 
     async def refresh_totw(self) -> TotwReport | None:
         """Update the TOTW prediction; never raises (runs from the scheduler)."""
@@ -203,6 +231,17 @@ def create_scheduler(collector: Collector, interval_min: int, jitter_s: int = 0)
         max_instances=1,
         coalesce=True,
         misfire_grace_time=300,
+        jitter=jitter_s or None,
+    )
+    scheduler.add_job(
+        collector.refresh_leaks,
+        "interval",
+        hours=LEAKS_INTERVAL_H,
+        id=LEAKS_JOB_ID,
+        next_run_time=datetime.now(UTC) + timedelta(minutes=1),
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
         jitter=jitter_s or None,
     )
     scheduler.add_job(
