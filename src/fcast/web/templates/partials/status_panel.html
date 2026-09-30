@@ -10,7 +10,7 @@
         Letzter Lauf: {{ result.started_at | dt("%d.%m. %H:%M:%S") }}
         {% if result.finished_at %}({{ ((result.finished_at - result.started_at).total_seconds()) | round(1) }} s){% endif %}<br>
         {{ result.players }} Spieler · {{ result.stored }} neue Preise · {{ result.unchanged }} unverändert ·
-        {{ result.missing | length }} ohne Preis
+        {% if result.extinct %}{{ result.extinct | length }} extinct · {% endif %}{{ result.missing | length }} ohne Preis
         {% if result.error_count %}· <span class="down">{{ result.error_count }} Fehler</span>{% endif %}
       </p>
       {% for source, reason in result.paused.items() %}

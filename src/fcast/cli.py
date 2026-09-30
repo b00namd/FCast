@@ -206,7 +206,8 @@ def collect(
             await collector.aclose()
         typer.echo(
             f"{result.players} players: {result.stored} new snapshots, "
-            f"{result.unchanged} unchanged, {len(result.missing)} without price"
+            f"{result.unchanged} unchanged, {len(result.extinct)} extinct, "
+            f"{len(result.missing)} without price"
         )
         for source, reason in result.paused.items():
             typer.secho(
