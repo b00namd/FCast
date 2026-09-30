@@ -422,3 +422,56 @@ def signals(
             "-" if s.score is None else f"{s.score:.0f}",
         )
     console.print(table)
+
+
+alert_app = typer.Typer(help="Push alerts.", no_args_is_help=True)
+app.add_typer(alert_app, name="alert")
+
+
+@alert_app.command("test")
+def alert_test() -> None:
+    """Send a test notification through the configured channel."""
+    from fcast.alerts.engine import build_notifier
+    from fcast.alerts.notifier import Notification, NotifierError
+
+    notifier = build_notifier(get_settings())
+
+    async def _send() -> None:
+        try:
+            await notifier.send(
+                Notification(
+                    title="FCast Test",
+                    message="Test aus der CLI - Alerts kommen an.",
+                    tags=("white_check_mark",),
+                )
+            )
+        finally:
+            await notifier.aclose()
+
+    try:
+        asyncio.run(_send())
+    except NotifierError as exc:
+        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(f"Test notification sent via {notifier.name}.")
+
+
+@alert_app.command("check")
+def alert_check() -> None:
+    """Show which alerts would be sent right now (dry run, nothing is sent)."""
+    from fcast.alerts.engine import AlertEngine, build_notifier
+    from fcast.db.base import utcnow
+
+    settings = get_settings()
+    engine = AlertEngine(build_notifier(settings), settings)
+    with _db_session() as session:
+        report = engine.evaluate(session, utcnow())
+    if not report.decisions:
+        typer.echo("Keine Alert-Kandidaten.")
+        return
+    table = Table(title="Alert-Kandidaten")
+    for column in ("Entscheidung", "Regel", "Titel"):
+        table.add_column(column)
+    for candidate, outcome in report.decisions:
+        table.add_row(outcome.value, candidate.rule, candidate.notification.title)
+    console.print(table)

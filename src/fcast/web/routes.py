@@ -11,10 +11,12 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from fcast.alerts.config import AlertConfig, load_alert_config, save_alert_config
+from fcast.alerts.notifier import Notification, NotifierError
 from fcast.analysis import service as analysis
 from fcast.analysis import signals as sig
 from fcast.collector.service import JOB_ID, Collector
-from fcast.config import Platform, Settings
+from fcast.config import Platform, Settings, is_clock_time
 from fcast.db import repositories as repo
 from fcast.db.base import utcnow
 from fcast.db.models import Player
@@ -418,3 +420,92 @@ def status_resume(request: Request, name: str) -> Response:
     if not _is_htmx(request):
         return RedirectResponse("/status", status_code=303)
     return _render(request, "partials/status_panel.html", _status_context(request))
+
+
+# --- alerts ----------------------------------------------------------------
+
+
+def _alerts_context(request: Request, **extra: Any) -> dict[str, Any]:
+    settings = _settings(request)
+    collector = _collector(request)
+    with _db(request) as session:
+        config = load_alert_config(session, settings)
+        history = list(repo.list_alerts(session, limit=50))
+    return {
+        "config": config,
+        "history": history,
+        "channel": collector.alerts.notifier.name,
+        "quiet_now": config.is_quiet(utcnow(), settings.tz),
+        "nav": "alerts",
+        "message": None,
+        "errors": [],
+    } | extra
+
+
+@pages.get("/alerts", response_class=HTMLResponse)
+def alerts_page(request: Request) -> HTMLResponse:
+    return _render(request, "alerts.html", _alerts_context(request))
+
+
+@pages.post("/alerts/settings", response_class=HTMLResponse)
+def alerts_save(
+    request: Request,
+    cooldown_h: FormStr,
+    quiet_start: FormStr,
+    quiet_end: FormStr,
+    min_profit: OptionalFormStr = None,
+    enabled: OptionalFormStr = None,
+    buy_dip: OptionalFormStr = None,
+    sell_target: OptionalFormStr = None,
+    overprice: OptionalFormStr = None,
+    system: OptionalFormStr = None,
+) -> HTMLResponse:
+    errors: list[str] = []
+    try:
+        cooldown = float(cooldown_h.replace(",", "."))
+        if cooldown < 0:
+            raise ValueError
+    except ValueError:
+        errors.append("Cooldown: Stunden als Zahl ≥ 0 angeben")
+        cooldown = 0.0
+    for label, value in (("Ruhezeit Beginn", quiet_start), ("Ruhezeit Ende", quiet_end)):
+        if not is_clock_time(value):
+            errors.append(f"{label}: Uhrzeit im Format HH:MM angeben")
+    try:
+        profit_value = forms.parse_coins(min_profit) or 0
+    except ValueError:
+        errors.append("Mindestprofit: ungültiger Betrag")
+        profit_value = 0
+    if errors:
+        return _render(request, "alerts.html", _alerts_context(request, errors=errors), 422)
+    config = AlertConfig(
+        enabled=enabled is not None,
+        cooldown_h=cooldown,
+        quiet_start=quiet_start,
+        quiet_end=quiet_end,
+        min_profit=profit_value,
+        buy_dip=buy_dip is not None,
+        sell_target=sell_target is not None,
+        overprice=overprice is not None,
+        system=system is not None,
+    )
+    with _db(request) as session:
+        save_alert_config(session, config)
+    return _render(request, "alerts.html", _alerts_context(request, message="Gespeichert."))
+
+
+@pages.post("/alerts/test", response_class=HTMLResponse)
+async def alerts_test(request: Request) -> HTMLResponse:
+    notifier = _collector(request).alerts.notifier
+    try:
+        await notifier.send(
+            Notification(
+                title="FCast Test",
+                message="Test aus dem Dashboard - Alerts kommen an.",
+                tags=("white_check_mark",),
+            )
+        )
+        message, errors = f"Test über {notifier.name} gesendet.", []
+    except NotifierError as exc:
+        message, errors = None, [f"Senden fehlgeschlagen: {exc}"]
+    return _render(request, "alerts.html", _alerts_context(request, message=message, errors=errors))

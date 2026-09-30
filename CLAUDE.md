@@ -3,7 +3,7 @@
 ## Was ist FCast?
 FCast ist ein privates Analyse- und Alarm-Tool für den Transfermarkt in EA FC 27 Ultimate Team.
 Es sammelt Spielerpreise, erkennt günstige Einstiegspunkte, bewertet anstehende Promos
-und meldet Kaufgelegenheiten per Telegram. **Gekauft und verkauft wird immer manuell durch den Nutzer.**
+und meldet Kaufgelegenheiten per Push (ntfy). **Gekauft und verkauft wird immer manuell durch den Nutzer.**
 
 Den Ablauf in Phasen beschreibt `PLAN.md`. Es wird immer nur eine Phase umgesetzt, danach wird gestoppt und zusammengefasst.
 
@@ -23,7 +23,7 @@ Den Ablauf in Phasen beschreibt `PLAN.md`. Es wird immer nur eine Phase umgesetz
   gefälschte User-Agents). Cookies nur für Seiteneinstellungen (z. B. Plattform), nie für Sessions.
   Antwortet eine Quelle mit 403/429/Challenge, wird sie automatisch pausiert (Default 24 h).
 - In Tests keine Live-Requests. Stattdessen gespeicherte HTML/JSON-Fixtures unter `tests/fixtures/` verwenden.
-- Secrets (Telegram-Token usw.) nur über `.env`, niemals committen.
+- Secrets (ntfy-Token, Web-Passwort usw.) nur über `.env`, niemals committen.
 
 ## Tech-Stack
 - Python 3.12, Paketverwaltung mit `uv`
@@ -32,7 +32,7 @@ Den Ablauf in Phasen beschreibt `PLAN.md`. Es wird immer nur eine Phase umgesetz
 - Scheduler: APScheduler
 - Konfiguration: `pydantic-settings`
 - Web-Dashboard: FastAPI + Jinja2 + HTMX, Charts mit Chart.js
-- Alerts: Telegram Bot API direkt über `httpx`
+- Alerts: selbst gehostetes ntfy (JSON-API über `httpx`), austauschbar über `alerts/notifier.py`
 - Qualität: `ruff` (lint + format), `mypy --strict` für `src/`, `pytest` + `pytest-asyncio`
 - Deployment: Docker + docker-compose (läuft auf dem Homeserver)
 

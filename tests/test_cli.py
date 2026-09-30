@@ -17,7 +17,7 @@ def test_version() -> None:
 
 
 def test_config_masks_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("FCAST_TELEGRAM_TOKEN", "super-secret")
+    monkeypatch.setenv("FCAST_NTFY_TOKEN", "super-secret")
     get_settings.cache_clear()
     try:
         result = runner.invoke(app, ["config"])
@@ -203,3 +203,12 @@ def test_analyze_and_signals_commands(db_path: Path) -> None:
     assert "Keine Signale." in runner.invoke(app, ["signals", "--rule", "sell_target"]).output
     assert runner.invoke(app, ["signals", "--rule", "nope"]).exit_code != 0
     assert runner.invoke(app, ["analyze", "999"]).exit_code == 1
+
+
+def test_alert_commands_without_channel(db_path: Path) -> None:
+    result = runner.invoke(app, ["alert", "test"])
+    assert result.exit_code == 0, result.output
+    assert "sent via log" in result.output
+    result = runner.invoke(app, ["alert", "check"])
+    assert result.exit_code == 0, result.output
+    assert "Keine Alert-Kandidaten." in result.output

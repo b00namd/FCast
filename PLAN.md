@@ -50,19 +50,11 @@ Spielerdetail mit Chart und „Preis erfassen“, Status mit „Jetzt sammeln“
 
 ---
 
-## Phase 5 – Telegram-Alerts
-**Aufgaben**
-- Telegram-Client (`sendMessage`, Markdown), Alert-Engine: Signale → Nachrichten
-- Cooldown pro Karte und Regel (Default 6 h), Deduplizierung über `alerts_log`, Ruhezeiten
-- Nachricht: Karte, aktueller Preis, Ø 7 Tage, Empfehlung (Kauf-Max bzw. Einstellpreis),
-  erwarteter Profit nach Steuer, Link zum Dashboard
-- Systemmeldungen: Quelle pausiert (403/429/Challenge), Collector-Fehler
-- Dashboard: Alert-Einstellungen (Cooldown, Ruhezeiten, Mindestmarge), Alert-Verlauf
-- CLI: `fcast alert test`
-
-**Abnahme**
-- Tests mit gemocktem Telegram-Client
-- Kein doppelter Alert innerhalb des Cooldowns
+## ✅ Phase 5 – Push-Alerts (erledigt)
+Push über selbst gehostetes ntfy (statt Telegram), austauschbarer Notifier. Alert-Engine nach jedem
+Sammellauf: Cooldown pro Karte und Regel, Ruhezeiten, Mindestprofit, Regeln einzeln abschaltbar;
+Systemmeldungen (Quelle pausiert, Sammellauf ohne Preise). Dashboard-Seite „Alerts“ mit
+Einstellungen, Verlauf und Test-Push; CLI `fcast alert test|check`.
 
 ---
 

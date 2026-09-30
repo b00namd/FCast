@@ -490,3 +490,75 @@ def test_outlier_does_not_inflate_overprice_score(client: TestClient, collector:
     assert result.supply.listings[0] == 8_150_000
     assert result.overprice is not None
     assert result.overprice.score < 40  # the 48 % gap to the outlier must not count
+
+
+# --- alerts page (Phase 5) -------------------------------------------------
+
+
+def test_alerts_page_shows_channel_and_defaults(client: TestClient) -> None:
+    page = client.get("/alerts").text
+    assert "Kanal: <strong>log</strong>" in page
+    assert 'name="quiet_start" type="time" value="00:00"' in page
+    assert "Noch keine Alerts gesendet." in page
+
+
+def test_alerts_settings_are_saved(client: TestClient, collector: Collector) -> None:
+    from fcast.alerts.config import load_alert_config
+
+    response = client.post(
+        "/alerts/settings",
+        data={
+            "enabled": "on",
+            "buy_dip": "on",
+            "system": "on",
+            "cooldown_h": "2,5",
+            "min_profit": "10k",
+            "quiet_start": "23:00",
+            "quiet_end": "06:30",
+        },
+    )
+    assert response.status_code == 200
+    assert "Gespeichert." in response.text
+    with collector.session_factory() as session:
+        config = load_alert_config(session, collector.settings)
+    assert config.enabled is True
+    assert config.cooldown_h == 2.5
+    assert config.min_profit == 10_000
+    assert (config.quiet_start, config.quiet_end) == ("23:00", "06:30")
+    assert config.buy_dip is True
+    assert config.overprice is False
+    assert config.sell_target is False
+
+
+def test_alerts_settings_validation(client: TestClient) -> None:
+    response = client.post(
+        "/alerts/settings",
+        data={"cooldown_h": "-1", "quiet_start": "25:00", "quiet_end": "07:00", "min_profit": "x"},
+    )
+    assert response.status_code == 422
+    assert "Cooldown" in response.text
+    assert "Ruhezeit Beginn" in response.text
+    assert "Mindestprofit" in response.text
+
+
+def test_alerts_test_push_and_history(client: TestClient, collector: Collector) -> None:
+    from fcast.alerts.notifier import Notification, Notifier
+
+    sent: list[Notification] = []
+
+    class Recorder(Notifier):
+        name = "recorder"
+
+        async def send(self, notification: Notification) -> None:
+            sent.append(notification)
+
+    collector.alerts.notifier = Recorder()
+    response = client.post("/alerts/test")
+    assert "Test über recorder gesendet." in response.text
+    assert sent[0].title == "FCast Test"
+
+    with collector.session_factory.begin() as session:
+        repo.log_alert(session, "BUY_DIP", "Kauf-Dip: P1\nPreis 1.000")
+    page = client.get("/alerts").text
+    assert "Kauf-Dip: P1" in page
+    assert "Preis 1.000" in page

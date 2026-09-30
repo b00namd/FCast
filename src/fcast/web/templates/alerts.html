@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Alerts{% endblock %}
+{% block content %}
+<h2>Alerts</h2>
+{% if message %}<div class="message ok" role="status">{{ message }}</div>{% endif %}
+{% if errors %}
+  <div class="message error" role="alert">{% for e in errors %}<div>{{ e }}</div>{% endfor %}</div>
+{% endif %}
+
+<p class="muted">
+  Kanal: <strong>{{ channel }}</strong>
+  {% if channel == "log" %}– kein Push eingerichtet (FCAST_NTFY_URL fehlt), Alerts landen nur im Log.{% endif %}
+  {% if quiet_now %} · <span class="badge warn">Ruhezeit aktiv</span>{% endif %}
+</p>
+
+<form method="post" action="/alerts/settings">
+  <fieldset>
+    <label><input type="checkbox" role="switch" name="enabled" {% if config.enabled %}checked{% endif %}> Alerts aktiv</label>
+  </fieldset>
+  <fieldset>
+    <legend>Welche Alerts?</legend>
+    <label><input type="checkbox" name="buy_dip" {% if config.buy_dip %}checked{% endif %}> Kauf-Dip</label>
+    <label><input type="checkbox" name="overprice" {% if config.overprice %}checked{% endif %}> ÜV-Chance</label>
+    <label><input type="checkbox" name="sell_target" {% if config.sell_target %}checked{% endif %}> Verkaufsziel erreicht</label>
+    <label><input type="checkbox" name="system" {% if config.system %}checked{% endif %}> System (Quelle pausiert, Sammellauf ohne Preise)</label>
+  </fieldset>
+  <div class="grid">
+    <label>Cooldown je Karte und Signal (Stunden)
+      <input name="cooldown_h" inputmode="decimal" value="{{ config.cooldown_h | string | replace('.0', '') }}">
+    </label>
+    <label>Mindestprofit nach Steuer
+      <input name="min_profit" inputmode="decimal" placeholder="0 = alle" value="{{ config.min_profit or '' }}">
+    </label>
+  </div>
+  <div class="grid">
+    <label>Ruhezeit von
+      <input name="quiet_start" type="time" value="{{ config.quiet_start }}">
+    </label>
+    <label>bis
+      <input name="quiet_end" type="time" value="{{ config.quiet_end }}">
+    </label>
+  </div>
+  <small class="muted">Gleiche Uhrzeit bei „von“ und „bis“ schaltet die Ruhezeit ab. Signale aus der Ruhezeit werden danach gemeldet, wenn sie noch gelten.</small>
+  <p><button type="submit">Speichern</button></p>
+</form>
+<form method="post" action="/alerts/test">
+  <button type="submit" class="secondary outline">Test-Push senden</button>
+</form>
+
+<h3>Verlauf</h3>
+{% if not history %}
+  <p class="muted">Noch keine Alerts gesendet.</p>
+{% else %}
+<div class="overflow-auto">
+<table class="striped">
+  <thead><tr><th>Zeit</th><th>Regel</th><th>Nachricht</th></tr></thead>
+  <tbody>
+  {% for a in history %}
+    {% set lines = a.message.split("\n") %}
+    <tr>
+      <td class="nowrap">{{ a.sent_at | dt }}</td>
+      <td><small>{{ a.rule }}</small></td>
+      <td><strong>{{ lines[0] }}</strong>{% if lines | length > 1 %}<br><small class="muted">{{ lines[1:] | join(" · ") }}</small>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

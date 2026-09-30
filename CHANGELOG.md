@@ -4,6 +4,22 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Phase 5 – Push-Alerts
+- **ntfy statt Telegram** (Entscheidung des Nutzers): selbst gehostet auf dem Homeserver
+  (`~/docker/ntfy`, Login-Pflicht, keine Weboberfläche). FCast sendet über die JSON-API mit
+  Zugriffstoken (`FCAST_NTFY_URL`, `FCAST_NTFY_TOPIC`, `FCAST_NTFY_TOKEN`); ohne URL landen
+  Alerts nur im Log. Telegram-Einstellungen entfernt.
+- `alerts/notifier.py`: austauschbare `Notifier`-Schnittstelle (ntfy, Log).
+- `alerts/engine.py`: nach jedem Sammellauf werden Signale zu Nachrichten – mit Preis, Ø 7 Tage,
+  Empfehlung, Profit nach Steuer, Begründung sowie Buttons „Dashboard“ und „FUTBIN“
+  (`FCAST_DASHBOARD_URL`). Kauf-Dip und ÜV mit hoher Priorität.
+- Cooldown pro Karte und Regel (Default 6 h, über `alerts_log`), Ruhezeiten (auch über
+  Mitternacht; zurückgehaltene Signale kommen danach, wenn sie noch gelten), Mindestprofit,
+  Regeln einzeln abschaltbar. Fehlgeschlagene Zustellungen werden beim nächsten Lauf erneut versucht.
+- Systemmeldungen: Quelle pausiert (403/429/Challenge) und Sammellauf ganz ohne Preise.
+- Dashboard: Seite **Alerts** (Einstellungen in der neuen Tabelle `app_settings`, überschreiben die
+  Env-Defaults; Verlauf; Test-Push). CLI: `fcast alert test`, `fcast alert check` (Trockenlauf).
+
 ### Phase 4 – Marktanalyse & Angebotslage
 - `analysis/pricing.py`: Preisstufen (runden ab/auf/nächste, n Stufen weiter), `net_after_tax()`,
   `profit()`, `break_even_sell_price()`; Grenzwerte getestet. Die Stufen aus `CLAUDE.md` sind für
