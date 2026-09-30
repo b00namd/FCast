@@ -74,6 +74,8 @@
 {% if previous.rate %}
   {% set hits, total, names = previous.rate %}
   <p><strong>{{ hits }} von {{ total }}</strong> der Top-Kandidaten waren im TOTW{% if names %}: {{ names | join(", ") }}{% endif %}.</p>
+{% elif previous.actual %}
+  <p class="muted">Für TOTW {{ previous.week.number }} gab es noch keine Prognose (FCast lief da noch nicht oder es gab keine Spiele).</p>
 {% else %}
   <p class="muted">Noch nicht ausgewertet (FCast liest das echte TOTW nach dem Release bei FUTBIN aus).</p>
 {% endif %}

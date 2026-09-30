@@ -307,3 +307,11 @@ async def test_refresh_skips_futbin_while_paused(factory: sessionmaker[Session])
     assert report.candidates > 0
     assert report.linked == 0
     assert requests == []
+
+
+def test_hit_rate_without_prediction(factory: sessionmaker[Session]) -> None:
+    with factory.begin() as session:
+        session.add(TotwActual(week=5, futbin_id=1, slug="michael-olise", name="Michael Olise"))
+    with factory() as session:
+        assert hit_rate(session, 5) is None
+        assert hit_rate(session, 6) is None

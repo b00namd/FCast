@@ -372,7 +372,7 @@ class TotwService:
 
 
 def hit_rate(session: Session, number: int, top: int = 10) -> tuple[int, int, list[str]] | None:
-    """(hits, predicted, hit names) of a released week, or None if not evaluated yet."""
+    """(hits, predicted, hit names) of a released week; None if not evaluated or not predicted."""
     actual = session.scalars(select(TotwActual).where(TotwActual.week == number)).all()
     if not actual:
         return None
@@ -382,5 +382,7 @@ def hit_rate(session: Session, number: int, top: int = 10) -> tuple[int, int, li
         .order_by(TotwPrediction.rank)
         .limit(top)
     ).all()
+    if not predicted:
+        return None  # FCast made no prediction for that week
     hits = [p.name for p in predicted if any(matches_slug(p.name, a.slug) for a in actual)]
     return len(hits), len(predicted), hits
