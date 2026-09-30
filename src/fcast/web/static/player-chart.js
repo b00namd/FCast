@@ -1,11 +1,17 @@
 // Renders the 7-day price chart on the player page. Data: {source: [[timestampMs, price], ...]}
+if (typeof Chart !== "undefined") {
+  Chart.defaults.color = "#8594a8";
+  Chart.defaults.borderColor = "#1f2a37";
+  Chart.defaults.font.family = "Inter, system-ui, sans-serif";
+  Chart.defaults.font.size = 11;
+}
 (function () {
   const dataElement = document.getElementById("chart-data");
   const canvas = document.getElementById("price-chart");
   if (!dataElement || !canvas || typeof Chart === "undefined") return;
 
   const series = JSON.parse(dataElement.textContent);
-  const colors = { futbin: "#3fa9f5", futnext: "#f39c12", manual: "#2ecc71" };
+  const colors = { futbin: "#38bdf8", futnext: "#fb923c", manual: "#34d399" };
   const coins = new Intl.NumberFormat("de-DE");
   const time = new Intl.DateTimeFormat("de-DE", {
     day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
@@ -32,6 +38,7 @@
     options: {
       maintainAspectRatio: false,
       parsing: false,
+      layout: { padding: { left: 6, right: 6 } },
       interaction: { mode: "nearest", intersect: false },
       scales: {
         x: {

@@ -3,33 +3,37 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0a0e13">
   <title>{% block title %}FCast{% endblock %} · FCast</title>
+  <link rel="preload" href="/static/vendor/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/vendor/pico.min.css">
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/vendor/htmx.min.js" defer></script>
   {% block head %}{% endblock %}
 </head>
 <body>
-  <header class="container">
-    <nav>
-      <ul>
-        <li><strong>FCast</strong> <small class="muted">{{ platform_label }}</small></li>
-      </ul>
-      <ul>
-        <li><a href="/prices" {% if nav == "prices" %}aria-current="page"{% endif %}>Übersicht</a></li>
-        <li><a href="/signals" {% if nav == "signals" %}aria-current="page"{% endif %}>Signale</a></li>
-        <li><a href="/watchlist" {% if nav == "watchlist" %}aria-current="page"{% endif %}>Watchlist</a></li>
-        <li><a href="/alerts" {% if nav == "alerts" %}aria-current="page"{% endif %}>Alerts</a></li>
-        <li><a href="/status" {% if nav == "status" %}aria-current="page"{% endif %}>Status</a></li>
-      </ul>
-    </nav>
+  <header class="appbar">
+    <div class="appbar-inner">
+      <a class="brand" href="/prices">
+        <span class="brand-mark" aria-hidden="true">FC</span>
+        <span>FCast</span>
+        <span class="platform-tag" title="Plattform">{{ platform_label }}</span>
+      </a>
+      <nav class="mainnav" aria-label="Hauptnavigation">
+        <a href="/prices" {% if nav == "prices" %}aria-current="page"{% endif %}>Übersicht</a>
+        <a href="/signals" {% if nav == "signals" %}aria-current="page"{% endif %}>Signale</a>
+        <a href="/watchlist" {% if nav == "watchlist" %}aria-current="page"{% endif %}>Watchlist</a>
+        <a href="/alerts" {% if nav == "alerts" %}aria-current="page"{% endif %}>Alerts</a>
+        <a href="/status" {% if nav == "status" %}aria-current="page"{% endif %}>Status</a>
+      </nav>
+    </div>
   </header>
-  <main class="container">
+  <main class="page">
     {% block content %}{% endblock %}
   </main>
-  <footer class="container">
-    <small class="muted">FCast {{ version }} · Kaufen und verkaufen immer manuell.</small>
+  <footer class="page-footer">
+    <span class="muted">FCast {{ version }} · Kaufen und verkaufen immer manuell.</span>
   </footer>
   {% block scripts %}{% endblock %}
 </body>

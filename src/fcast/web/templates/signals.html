@@ -2,14 +2,12 @@
 {% block title %}Signale{% endblock %}
 {% block content %}
 <h2>Signale</h2>
-<nav aria-label="Filter">
-  <ul>
-    <li><a href="/signals" {% if not selected %}aria-current="page"{% endif %}>Alle</a></li>
-    {% for rule in rules %}
-      <li><a href="/signals?rule={{ rule.value }}" {% if selected == rule %}aria-current="page"{% endif %}>{{ labels[rule] }}</a></li>
-    {% endfor %}
-  </ul>
-</nav>
+<div class="filters" role="navigation" aria-label="Filter">
+  <a href="/signals" {% if not selected %}aria-current="page"{% endif %}>Alle</a>
+  {% for rule in rules %}
+    <a href="/signals?rule={{ rule.value }}" {% if selected == rule %}aria-current="page"{% endif %}>{{ labels[rule] }}</a>
+  {% endfor %}
+</div>
 
 {% if not signals %}
   <p class="muted">Aktuell keine Signale{% if selected %} für „{{ labels[selected] }}“{% endif %}.</p>

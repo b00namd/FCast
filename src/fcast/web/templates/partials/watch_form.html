@@ -1,4 +1,4 @@
-<form id="watch-form" method="post" action="/watchlist"
+<form id="watch-form" class="form-card" method="post" action="/watchlist"
       hx-post="/watchlist" hx-target="this" hx-swap="outerHTML">
   {% if message %}<div class="message ok" role="status">{{ message }}</div>{% endif %}
   {% if errors %}
@@ -9,7 +9,7 @@
   <div class="grid">
     <label>EA-ID oder FUT.GG-Link <small class="muted">(optional mit FUTBIN-Link)</small>
       <input name="ea_id" placeholder="231747 oder https://www.fut.gg/players/…" value="{{ form.ea_id or '' }}">
-      <small class="muted">Leer lassen, wenn du unten einen FUTBIN-Link einträgst – FCast liest die ID dann dort aus.</small>
+      <small class="hint">Leer lassen, wenn du unten einen FUTBIN-Link einträgst – FCast liest die ID dann dort aus.</small>
     </label>
     <label>Name <small class="muted">(optional)</small>
       <input name="name" placeholder="wird sonst automatisch ergänzt" value="{{ form.name or '' }}">
@@ -29,7 +29,7 @@
   <label>Notiz
     <input name="note" maxlength="500" value="{{ form.note or '' }}">
   </label>
-  <button type="submit">Speichern</button>
+  <div class="form-actions"><button type="submit">Zur Watchlist hinzufügen</button></div>
 </form>
 {% if oob_rows %}
 <template>

@@ -13,7 +13,7 @@
   {% if quiet_now %} · <span class="badge warn">Ruhezeit aktiv</span>{% endif %}
 </p>
 
-<form method="post" action="/alerts/settings">
+<form method="post" action="/alerts/settings" class="form-card">
   <fieldset>
     <label><input type="checkbox" role="switch" name="enabled" {% if config.enabled %}checked{% endif %}> Alerts aktiv</label>
   </fieldset>
@@ -40,11 +40,11 @@
       <input name="quiet_end" type="time" value="{{ config.quiet_end }}">
     </label>
   </div>
-  <small class="muted">Gleiche Uhrzeit bei „von“ und „bis“ schaltet die Ruhezeit ab. Signale aus der Ruhezeit werden danach gemeldet, wenn sie noch gelten.</small>
-  <p><button type="submit">Speichern</button></p>
-</form>
-<form method="post" action="/alerts/test">
-  <button type="submit" class="secondary outline">Test-Push senden</button>
+  <small class="hint">Gleiche Uhrzeit bei „von“ und „bis“ schaltet die Ruhezeit ab. Signale aus der Ruhezeit werden danach gemeldet, wenn sie noch gelten.</small>
+  <div class="form-actions">
+    <button type="submit">Speichern</button>
+    <button type="submit" class="secondary outline" formaction="/alerts/test">Test-Push senden</button>
+  </div>
 </form>
 
 <h3>Verlauf</h3>
