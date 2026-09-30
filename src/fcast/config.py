@@ -1,5 +1,6 @@
 """Application settings, loaded from environment variables and an optional `.env` file."""
 
+import re
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -8,6 +9,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def is_clock_time(value: str) -> bool:
+    """True for a 24-hour "HH:MM" time."""
+    return re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value) is not None
 
 
 class Platform(StrEnum):
@@ -29,8 +35,18 @@ class Settings(BaseSettings):
 
     platform: Platform = Platform.CONSOLE
     db_path: Path = Path("data/fcast.db")
-    telegram_token: SecretStr | None = None
-    telegram_chat_id: str | None = None
+    # Push alerts via ntfy (self-hosted). Without URL alerts are only logged.
+    ntfy_url: str | None = None
+    ntfy_topic: str = "fcast"
+    ntfy_token: SecretStr | None = None
+    # Base URL of the dashboard, used for "open in dashboard" buttons in alerts.
+    dashboard_url: str | None = None
+
+    # Alert defaults; the dashboard can override them (stored in the database).
+    alert_cooldown_h: float = Field(default=6.0, ge=0)
+    quiet_hours_start: str = "00:00"
+    quiet_hours_end: str = "07:00"
+    alert_min_profit: int = Field(default=0, ge=0)
     collect_interval_min: int = Field(default=30, ge=1, le=24 * 60)
     # Local timezone for user-facing times and CSV timestamps without offset.
     timezone: str = "Europe/Berlin"
@@ -85,6 +101,13 @@ class Settings(BaseSettings):
             ZoneInfo(value)
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError(f"unknown timezone: {value}") from exc
+        return value
+
+    @field_validator("quiet_hours_start", "quiet_hours_end")
+    @classmethod
+    def _valid_clock_time(cls, value: str) -> str:
+        if not is_clock_time(value):
+            raise ValueError(f"expected HH:MM, got {value!r}")
         return value
 
     @field_validator("sources")

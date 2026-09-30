@@ -195,3 +195,12 @@ class MarketState(Base):
     @property
     def extinct(self) -> bool:
         return not self.listings
+
+
+class AppSetting(Base):
+    """Key/value settings changed in the dashboard; they override environment defaults."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(500))

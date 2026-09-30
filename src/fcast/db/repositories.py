@@ -14,6 +14,7 @@ from fcast.config import Platform
 from fcast.db.base import utcnow
 from fcast.db.models import (
     AlertLog,
+    AppSetting,
     LinkType,
     MarketState,
     Player,
@@ -422,6 +423,13 @@ def log_alert(
     return entry
 
 
+def list_alerts(session: Session, limit: int = 50) -> Sequence[AlertLog]:
+    """Most recent alerts first."""
+    return session.scalars(
+        select(AlertLog).order_by(AlertLog.sent_at.desc(), AlertLog.id.desc()).limit(limit)
+    ).all()
+
+
 def last_alert(session: Session, rule: str, player: Player | None = None) -> AlertLog | None:
     """Most recent alert for a rule and player (or rule-wide alert if `player` is None)."""
     stmt = select(AlertLog).where(AlertLog.rule == rule)
@@ -486,3 +494,22 @@ def record_source_result(
         status.last_error = error[:500]
     session.flush()
     return status
+
+
+# --- app settings ----------------------------------------------------------
+
+
+def get_app_settings(session: Session, prefix: str = "") -> dict[str, str]:
+    stmt = select(AppSetting)
+    if prefix:
+        stmt = stmt.where(AppSetting.key.startswith(prefix))
+    return {row.key: row.value for row in session.scalars(stmt)}
+
+
+def set_app_setting(session: Session, key: str, value: str) -> None:
+    row = session.get(AppSetting, key)
+    if row is None:
+        session.add(AppSetting(key=key, value=value))
+    else:
+        row.value = value
+    session.flush()

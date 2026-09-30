@@ -22,6 +22,7 @@ EXPECTED_TABLES = {
     "source_refs",
     "source_status",
     "market_state",
+    "app_settings",
 }
 
 
