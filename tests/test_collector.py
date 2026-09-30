@@ -12,9 +12,11 @@ from fcast.collector.service import JOB_ID, Collector, create_scheduler, run_for
 from fcast.config import Platform, Settings
 from fcast.db import repositories as repo
 from fcast.db.base import Base
-from fcast.db.models import PriceSnapshot, SourceStatus
+from fcast.db.models import MarketState, PriceSnapshot, SourceStatus
 from fcast.db.session import create_db_engine, create_session_factory
 from fcast.sources.base import (
+    ExtinctError,
+    MarketInfo,
     PlayerInfo,
     PlayerNotFoundError,
     PriceQuote,
@@ -336,3 +338,76 @@ async def test_scheduler_jitter(tmp_path: Path) -> None:
     scheduler = create_scheduler(collector, 30, jitter_s=180)
     assert scheduler.get_job(JOB_ID).trigger.jitter == 180
     await collector.aclose()
+
+
+class MarketSource(FakeSource):
+    """Remote source that reports supply details like FUTBIN."""
+
+    def __init__(self, listings: dict[int, tuple[int, ...]], range_max: int = 1_000_000) -> None:
+        super().__init__("depth", remote=True)
+        self.listings = listings
+        self.range_max = range_max
+
+    async def fetch_price(self, ea_id: int, platform: Platform) -> PriceQuote:
+        self.calls.append(ea_id)
+        market = MarketInfo(listings=self.listings[ea_id], range_min=150, range_max=self.range_max)
+        if market.extinct:
+            raise ExtinctError("extinct", market)
+        return PriceQuote(ea_id, platform, market.listings[0], self.name, T0, market=market)
+
+
+def market_state(factory: sessionmaker[Session], ea_id: int) -> MarketState | None:
+    with factory() as session:
+        player = repo.get_player_by_ea_id(session, ea_id)
+        assert player is not None
+        return repo.get_market_state(session, player, Platform.PC)
+
+
+async def test_market_state_is_recorded(factory: sessionmaker[Session]) -> None:
+    watch(factory, 1)
+    await collect_once(factory, [MarketSource({1: (10_000, 10_500, 11_000)})], Platform.PC)
+    state = market_state(factory, 1)
+    assert state is not None
+    assert state.listings == (10_000, 10_500, 11_000)
+    assert state.range_max == 1_000_000
+    assert not state.extinct
+
+
+async def test_outlier_listing_is_dampened(factory: sessionmaker[Session]) -> None:
+    watch(factory, 1)
+    await collect_once(
+        factory, [MarketSource({1: (5_500, 8_150, 8_200)})], Platform.PC, outlier_gap_pct=15
+    )
+    assert snapshots(factory) == [(1, 8_150, "depth")]
+    state = market_state(factory, 1)
+    assert state is not None
+    assert state.listings[0] == 5_500  # the raw outlier stays visible
+
+
+async def test_extinct_stops_fallback_and_is_tracked(factory: sessionmaker[Session]) -> None:
+    watch(factory, 1)
+    depth = MarketSource({1: ()})
+    fallback = FakeSource("fallback", prices={1: 6_800_000}, remote=True)
+
+    result = await collect_once(factory, [depth, fallback], Platform.PC)
+
+    assert result.extinct == [1]
+    assert result.missing == []
+    assert fallback.calls == []  # no stale price from the fallback
+    assert snapshots(factory) == []
+    state = market_state(factory, 1)
+    assert state is not None
+    assert state.extinct
+    first_since = state.extinct_since
+    assert first_since is not None
+
+    # Still extinct later: the start time is kept. Listed again: it is cleared.
+    await collect_once(factory, [depth], Platform.PC)
+    state = market_state(factory, 1)
+    assert state is not None
+    assert state.extinct_since == first_since
+    depth.listings[1] = (7_000_000,)
+    await collect_once(factory, [depth], Platform.PC)
+    state = market_state(factory, 1)
+    assert state is not None
+    assert state.extinct_since is None

@@ -9,6 +9,7 @@ robots.txt, rate limits and an honest User-Agent are still enforced by `PoliteHt
 
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from selectolax.parser import HTMLParser, Node
@@ -16,7 +17,8 @@ from selectolax.parser import HTMLParser, Node
 from fcast.config import Platform
 from fcast.db.base import utcnow
 from fcast.sources.base import (
-    NoPriceError,
+    ExtinctError,
+    MarketInfo,
     PlayerInfo,
     PlayerNotFoundError,
     PriceQuote,
@@ -30,6 +32,7 @@ BASE_URL = "https://www.futbin.com"
 
 _PATH_RE = re.compile(r"^/(?P<year>\d{2})/player/(?P<id>\d+)/(?P<slug>[^/?#\s]+)/?$")
 _UPDATED_RE = re.compile(r"(\d+)\s*(sec|min|hour|day|week)s?\s*ago", re.IGNORECASE)
+_RANGE_RE = re.compile(r"Price Range:\s*([\d,.]+)\s*-\s*([\d,.]+)", re.IGNORECASE)
 _RATING_RE = re.compile(r"-\s*(\d{2,3})\s+rating", re.IGNORECASE)
 _CARD_TYPE_RE = re.compile(r"^.+?\s{2,}-\s*EA FC")
 _SHORT_NAME_RE = re.compile(r"^A headshot of (.+) in FC\d+$")
@@ -87,18 +90,37 @@ def _price_box(tree: HTMLParser, platform: Platform) -> Node:
     return box
 
 
-def parse_price(html: str, platform: Platform, now: datetime | None = None) -> tuple[int, datetime]:
-    """Lowest BIN and its update time for a platform. Raises `NoPriceError` if none listed."""
+@dataclass(frozen=True)
+class FutbinPrice:
+    price: int  # lowest BIN
+    updated: datetime
+    market: MarketInfo
+
+
+def parse_price(html: str, platform: Platform, now: datetime | None = None) -> FutbinPrice:
+    """Lowest BINs, EA price range and update time for a platform.
+
+    Raises `ExtinctError` (with the price range) when no listing exists.
+    """
     now = now or utcnow()
     tree = HTMLParser(html)
     box = _price_box(tree, platform)
-    price_node = box.css_first(".lowest-price-1")
-    if price_node is None:
+    first = box.css_first(".lowest-price-1")
+    if first is None:
         raise FutbinFormatError(f"no {platform} price element found")
-    price = _parse_coins(price_node.text(strip=True))
-    if not price:
-        raise NoPriceError(f"no {platform} price listed")
-    return price, _parse_updated(box.text(separator=" "), now)
+    values = [_parse_coins(first.text(strip=True))]
+    values += [_parse_coins(node.text(strip=True)) for node in box.css(".lowest-price")]
+    listings = tuple(sorted(value for value in values if value))
+    text = box.text(separator=" ")
+    range_match = _RANGE_RE.search(text)
+    market = MarketInfo(
+        listings=listings,
+        range_min=_parse_coins(range_match[1]) if range_match else None,
+        range_max=_parse_coins(range_match[2]) if range_match else None,
+    )
+    if market.extinct:
+        raise ExtinctError(f"no {platform} listings (extinct)", market)
+    return FutbinPrice(price=listings[0], updated=_parse_updated(text, now), market=market)
 
 
 def parse_player(html: str, ea_id: int) -> PlayerInfo:
@@ -153,9 +175,14 @@ class FutbinSource(PriceSource):
         return await self._client.get_text(BASE_URL + ref)
 
     async def fetch_price(self, ea_id: int, platform: Platform) -> PriceQuote:
-        price, updated = parse_price(await self._page(ea_id), platform)
+        parsed = parse_price(await self._page(ea_id), platform)
         return PriceQuote(
-            ea_id=ea_id, platform=platform, price=price, source=self.name, captured_at=updated
+            ea_id=ea_id,
+            platform=platform,
+            price=parsed.price,
+            source=self.name,
+            captured_at=parsed.updated,
+            market=parsed.market,
         )
 
     async def fetch_player(self, ea_id: int) -> PlayerInfo:

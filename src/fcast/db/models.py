@@ -169,3 +169,29 @@ class SourceStatus(Base):
     last_success_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     last_error_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     last_error: Mapped[str | None] = mapped_column(String(500))
+
+
+class MarketState(Base):
+    """Latest supply picture per card and platform (lowest BINs, EA range, extinct)."""
+
+    __tablename__ = "market_state"
+
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.id", ondelete="CASCADE"), primary_key=True
+    )
+    platform: Mapped[Platform] = mapped_column(str_enum(Platform), primary_key=True)
+    source: Mapped[str] = mapped_column(String(32))
+    observed_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    # Comma-separated lowest BINs, ascending; empty when extinct.
+    listings_csv: Mapped[str] = mapped_column(String(120), default="")
+    range_min: Mapped[int | None]
+    range_max: Mapped[int | None]
+    extinct_since: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    @property
+    def listings(self) -> tuple[int, ...]:
+        return tuple(int(value) for value in self.listings_csv.split(",") if value)
+
+    @property
+    def extinct(self) -> bool:
+        return not self.listings

@@ -2,17 +2,20 @@
 
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from fcast.analysis.market import effective_price
 from fcast.config import Platform
 from fcast.db import repositories as repo
 from fcast.db.base import utcnow
 from fcast.db.models import Player
 from fcast.db.session import session_scope
 from fcast.sources.base import (
+    ExtinctError,
+    MarketInfo,
     PlayerInfo,
     PlayerNotFoundError,
     PriceQuote,
@@ -33,6 +36,7 @@ class CollectResult:
     stored: int = 0
     unchanged: int = 0
     missing: list[int] = field(default_factory=list)
+    extinct: list[int] = field(default_factory=list)
     errors: dict[str, list[str]] = field(default_factory=dict)
     # Sources that started refusing us during this run, with the reason.
     paused: dict[str, str] = field(default_factory=dict)
@@ -87,17 +91,65 @@ def _handle_blocked(source: PriceSource, exc: SourceBlockedError, result: Collec
     result.paused.setdefault(source.name, str(exc))
 
 
+@dataclass
+class MarketObservation:
+    source: str
+    observed_at: datetime
+    market: MarketInfo
+
+
+@dataclass
+class PlayerFetch:
+    quotes: list[PriceQuote] = field(default_factory=list)
+    markets: list[MarketObservation] = field(default_factory=list)
+
+    @property
+    def extinct(self) -> bool:
+        return any(observation.market.extinct for observation in self.markets)
+
+
+def _dampen_outlier(quote: PriceQuote, outlier_gap_pct: float) -> PriceQuote:
+    """Use the realistic market price when the cheapest listing is a lone outlier."""
+    if quote.market is None:
+        return quote
+    price = effective_price(quote.market.listings, outlier_gap_pct)
+    if price is None or price == quote.price:
+        return quote
+    logger.info(
+        "%s: lowest BIN %d looks like an outlier, using %d", quote.ea_id, quote.price, price
+    )
+    return replace(quote, price=price)
+
+
 async def _collect_quotes(
-    sources: Sequence[PriceSource], ea_id: int, platform: Platform, result: CollectResult
-) -> list[PriceQuote]:
-    """Every local source is read; of the remote sources only the first one with a price."""
-    quotes: list[PriceQuote] = []
+    sources: Sequence[PriceSource],
+    ea_id: int,
+    platform: Platform,
+    result: CollectResult,
+    outlier_gap_pct: float,
+) -> PlayerFetch:
+    """Every local source is read; of the remote sources only the first one with an answer.
+
+    A remote source reporting "extinct" is an answer too: the fallback would only return a
+    stale price, so it is not asked.
+    """
+    fetch = PlayerFetch()
     have_remote = False
     for source in sources:
         if source.name in result.paused or (source.remote and have_remote):
             continue
         try:
-            quotes.append(await source.fetch_price(ea_id, platform))
+            quote = await source.fetch_price(ea_id, platform)
+            if quote.market is not None:
+                fetch.markets.append(
+                    MarketObservation(source.name, quote.captured_at, quote.market)
+                )
+            fetch.quotes.append(_dampen_outlier(quote, outlier_gap_pct))
+            have_remote = have_remote or source.remote
+            result.succeeded.add(source.name)
+        except ExtinctError as exc:
+            logger.info("%s: %s reports no listings (extinct)", ea_id, source.name)
+            fetch.markets.append(MarketObservation(source.name, utcnow(), exc.market))
             have_remote = have_remote or source.remote
             result.succeeded.add(source.name)
         except PlayerNotFoundError as exc:
@@ -107,7 +159,7 @@ async def _collect_quotes(
         except Exception as exc:  # a broken source must never stop the collector
             logger.warning("%s failed for %s: %s", source.name, ea_id, exc)
             result.add_error(source.name, f"{ea_id}: {exc}")
-    return quotes
+    return fetch
 
 
 async def _first_player_info(
@@ -156,6 +208,7 @@ async def collect_once(
     rotation: int = 0,
     rotate: bool = False,
     pause: timedelta = DEFAULT_PAUSE,
+    outlier_gap_pct: float = 15.0,
 ) -> CollectResult:
     """Collect prices for all active watchlist players.
 
@@ -178,10 +231,12 @@ async def collect_once(
 
     for index, (ea_id, needs_details) in enumerate(targets):
         ordered = source_order(active, rotation + index if rotate else 0)
-        quotes = await _collect_quotes(ordered, ea_id, platform, result)
+        fetch = await _collect_quotes(ordered, ea_id, platform, result, outlier_gap_pct)
         # After the price so that remote sources can answer from their page cache.
         info = await _first_player_info(ordered, ea_id, result) if needs_details else None
-        if not quotes:
+        if fetch.extinct:
+            result.extinct.append(ea_id)
+        elif not fetch.quotes:
             result.missing.append(ea_id)
         # One short transaction per player: a failure only affects that player.
         try:
@@ -189,7 +244,18 @@ async def collect_once(
                 player = repo.upsert_player(session, ea_id)
                 if info is not None:
                     apply_player_info(session, info)
-                for quote in quotes:
+                for observation in fetch.markets:
+                    repo.record_market_state(
+                        session,
+                        player,
+                        platform,
+                        observation.source,
+                        observation.observed_at,
+                        observation.market.listings,
+                        observation.market.range_min,
+                        observation.market.range_max,
+                    )
+                for quote in fetch.quotes:
                     if store_quote(session, player, quote):
                         result.stored += 1
                     else:
@@ -204,10 +270,12 @@ async def collect_once(
     except Exception:
         logger.exception("saving source status failed")
     logger.info(
-        "collect run: %d players, %d stored, %d unchanged, %d without price, %d errors%s",
+        "collect run: %d players, %d stored, %d unchanged, %d extinct, %d without price, "
+        "%d errors%s",
         result.players,
         result.stored,
         result.unchanged,
+        len(result.extinct),
         len(result.missing),
         result.error_count,
         f", paused: {', '.join(result.paused)}" if result.paused else "",

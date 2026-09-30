@@ -7,7 +7,7 @@ import httpx
 import pytest
 
 from fcast.config import Platform
-from fcast.sources.base import NoPriceError, PlayerNotFoundError
+from fcast.sources.base import ExtinctError, NoPriceError, PlayerNotFoundError
 from fcast.sources.futbin import (
     FutbinFormatError,
     FutbinSource,
@@ -36,13 +36,12 @@ PAGES = {"maradona": MARADONA, "muller": MULLER}
     ],
 )
 def test_parse_price(page: str, platform: Platform, price: int) -> None:
-    parsed, _ = parse_price(PAGES[page], platform, now=NOW)
-    assert parsed == price
+    assert parse_price(PAGES[page], platform, now=NOW).price == price
 
 
 def test_parse_price_update_time() -> None:
-    _, console_time = parse_price(MARADONA, Platform.CONSOLE, now=NOW)
-    _, pc_time = parse_price(MARADONA, Platform.PC, now=NOW)
+    console_time = parse_price(MARADONA, Platform.CONSOLE, now=NOW).updated
+    pc_time = parse_price(MARADONA, Platform.PC, now=NOW).updated
     assert console_time == NOW - timedelta(minutes=1)
     assert pc_time == NOW - timedelta(minutes=2)
 
@@ -58,14 +57,33 @@ def test_parse_price_update_time() -> None:
 )
 def test_update_time_formats(text: str, delta: timedelta) -> None:
     html = MARADONA.replace("Price Updated: 1 mins ago", text, 1)
-    _, updated = parse_price(html, Platform.CONSOLE, now=NOW)
+    updated = parse_price(html, Platform.CONSOLE, now=NOW).updated
     assert updated == NOW - delta
 
 
-def test_no_price_listed() -> None:
+def test_extinct_card_keeps_price_range() -> None:
     html = MARADONA.replace("8,150,000", "0", 1)
-    with pytest.raises(NoPriceError):
+    with pytest.raises(ExtinctError) as info:
         parse_price(html, Platform.CONSOLE, now=NOW)
+    assert isinstance(info.value, NoPriceError)  # older callers treat it as "no price"
+    assert info.value.market.extinct
+    assert (info.value.market.range_min, info.value.market.range_max) == (75_000, 14_500_000)
+
+
+def test_listings_and_price_range() -> None:
+    market = parse_price(MARADONA, Platform.CONSOLE, now=NOW).market
+    assert market.listings == (8_150_000,)
+    assert (market.range_min, market.range_max) == (75_000, 14_500_000)
+
+
+def test_multiple_listings_are_sorted() -> None:
+    # Fill the first of the four "further lowest prices" (0 in the fixture) with a value.
+    marker = 'class="lowest-price inline-with-icon">0<'
+    assert marker in MARADONA
+    html = MARADONA.replace(marker, 'class="lowest-price inline-with-icon">9,000,000<', 1)
+    parsed = parse_price(html, Platform.CONSOLE, now=NOW)
+    assert parsed.market.listings == (8_150_000, 9_000_000)
+    assert parsed.price == 8_150_000
 
 
 def test_changed_layout_is_reported() -> None:

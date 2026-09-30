@@ -15,6 +15,7 @@ from fcast.db.base import utcnow
 from fcast.db.models import (
     AlertLog,
     LinkType,
+    MarketState,
     Player,
     PortfolioPosition,
     PositionStatus,
@@ -197,6 +198,38 @@ def snapshot_exists(
         )
         is not None
     )
+
+
+def record_market_state(
+    session: Session,
+    player: Player,
+    platform: Platform,
+    source: str,
+    observed_at: datetime,
+    listings: Sequence[int],
+    range_min: int | None = None,
+    range_max: int | None = None,
+) -> MarketState:
+    """Upsert the latest supply picture; tracks since when a card has been extinct."""
+    state = session.get(MarketState, (player.id, platform))
+    if state is None:
+        state = MarketState(player_id=player.id, platform=platform)
+        session.add(state)
+    state.source = source
+    state.observed_at = observed_at
+    state.listings_csv = ",".join(str(value) for value in sorted(listings))
+    state.range_min = range_min
+    state.range_max = range_max
+    if listings:
+        state.extinct_since = None
+    elif state.extinct_since is None:
+        state.extinct_since = observed_at
+    session.flush()
+    return state
+
+
+def get_market_state(session: Session, player: Player, platform: Platform) -> MarketState | None:
+    return session.get(MarketState, (player.id, platform))
 
 
 # --- watchlist -------------------------------------------------------------

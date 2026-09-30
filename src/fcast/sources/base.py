@@ -19,6 +19,14 @@ class NoPriceError(PlayerNotFoundError):
     """The card exists but no price is listed (e.g. untradeable or extinct)."""
 
 
+class ExtinctError(NoPriceError):
+    """No listings at all. Carries the market info so the collector can record it."""
+
+    def __init__(self, message: str, market: "MarketInfo") -> None:
+        super().__init__(message)
+        self.market = market
+
+
 class RobotsDisallowedError(SourceError):
     pass
 
@@ -28,12 +36,26 @@ class SourceBlockedError(SourceError):
 
 
 @dataclass(frozen=True)
+class MarketInfo:
+    """Supply details as far as a source shows them."""
+
+    listings: tuple[int, ...] = ()  # lowest BINs, ascending
+    range_min: int | None = None  # EA price range
+    range_max: int | None = None
+
+    @property
+    def extinct(self) -> bool:
+        return not self.listings
+
+
+@dataclass(frozen=True)
 class PriceQuote:
     ea_id: int
     platform: Platform
     price: int
     source: str
     captured_at: datetime
+    market: MarketInfo | None = None
 
 
 @dataclass(frozen=True)

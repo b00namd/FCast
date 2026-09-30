@@ -51,6 +51,7 @@ class Collector:
                 rotation=self._runs,
                 rotate=self.settings.source_strategy == "rotate",
                 pause=timedelta(hours=self.settings.source_pause_h),
+                outlier_gap_pct=self.settings.outlier_gap_pct,
             )
             self._runs += 1
             return self.last_result

@@ -21,6 +21,7 @@ EXPECTED_TABLES = {
     "alerts_log",
     "source_refs",
     "source_status",
+    "market_state",
 }
 
 
