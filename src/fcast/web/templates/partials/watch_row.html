@@ -1,7 +1,8 @@
 <tr id="watch-{{ entry.player.ea_id }}" class="{% if not entry.active %}inactive{% endif %}">
   <td class="hide-sm">{{ entry.player.ea_id }}</td>
   <td><a href="/players/{{ entry.player.ea_id }}">{{ entry.player.display_name }}</a>
-    {% if not entry.active %}<span class="badge">inaktiv</span>{% endif %}</td>
+    {% if not entry.active %}<span class="badge">inaktiv</span>{% endif %}
+    {% if entry.player.card_type or entry.player.chem_style %}<br><small class="muted">{{ entry.player.card_type or "" }}{% if entry.player.card_type and entry.player.chem_style %} · {% endif %}{% if entry.player.chem_style %}Chemstyle {{ entry.player.chem_style }}{% endif %}</small>{% endif %}</td>
   <td class="num">{{ entry.target_buy | coins }}</td>
   <td class="num">{{ entry.target_sell | coins }}</td>
   <td class="hide-sm">{% if refs.futbin %}<a href="https://www.futbin.com{{ refs.futbin }}" target="_blank" rel="noreferrer">FUTBIN</a>{% else %}<span class="muted">FUTNext</span>{% endif %}</td>

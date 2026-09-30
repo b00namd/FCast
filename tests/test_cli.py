@@ -129,7 +129,14 @@ def test_prices_import_reports_format_errors(db_path: Path, tmp_path: Path) -> N
     assert "invalid price" in result.output
 
 
-def test_watch_add_with_futbin_link(db_path: Path) -> None:
+def test_watch_add_with_futbin_link(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from fcast.sources.base import PlayerInfo
+    from fcast.sources.futbin import FutbinSource
+
+    async def fake_resolve(self: FutbinSource, ref: str) -> PlayerInfo:
+        return PlayerInfo(ea_id=190042, name="Diego Maradona", rating=95)
+
+    monkeypatch.setattr(FutbinSource, "resolve_card", fake_resolve)
     result = runner.invoke(
         app,
         ["watch", "add", "190042", "--futbin", "https://www.futbin.com/27/player/21487/maradona"],
@@ -212,3 +219,34 @@ def test_alert_commands_without_channel(db_path: Path) -> None:
     result = runner.invoke(app, ["alert", "check"])
     assert result.exit_code == 0, result.output
     assert "Keine Alert-Kandidaten." in result.output
+
+
+def test_watch_add_with_only_futbin_link(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from fcast.sources.base import PlayerInfo
+    from fcast.sources.futbin import FutbinSource
+
+    async def fake_resolve(self: FutbinSource, ref: str) -> PlayerInfo:
+        assert ref == "/27/player/22947/michael-olise"
+        return PlayerInfo(ea_id=50579475, name="Michael Olise", rating=91, chem_style="Hunter")
+
+    monkeypatch.setattr(FutbinSource, "resolve_card", fake_resolve)
+    result = runner.invoke(
+        app, ["watch", "add", "--futbin", "https://www.futbin.com/27/player/22947/michael-olise"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Michael Olise (91) [50579475]" in result.output
+
+    mismatch = runner.invoke(
+        app,
+        [
+            "watch",
+            "add",
+            "231747",
+            "--futbin",
+            "https://www.futbin.com/27/player/22947/michael-olise",
+        ],
+    )
+    assert mismatch.exit_code == 1
+    assert "belongs to card 50579475" in mismatch.output
+
+    assert runner.invoke(app, ["watch", "add"]).exit_code != 0

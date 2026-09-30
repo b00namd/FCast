@@ -32,6 +32,7 @@ def build_sources(settings: Settings, lookup: RefLookup) -> list[PriceSource]:
                 futbin.FutbinSource(
                     make_http_client(settings),
                     lambda ea_id: lookup(ea_id, futbin.SOURCE_NAME),
+                    settings.platform,
                 )
             )
         elif name == futnext.SOURCE_NAME:

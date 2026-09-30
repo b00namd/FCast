@@ -37,6 +37,10 @@ class Player(Base):
     league: Mapped[str | None] = mapped_column(String(100))
     nation: Mapped[str | None] = mapped_column(String(100))
     club: Mapped[str | None] = mapped_column(String(100))
+    # FUTBIN usage data for the configured platform: recommended chem style and games played
+    chem_style: Mapped[str | None] = mapped_column(String(32))
+    games_used: Mapped[int | None]
+    goals_per_game: Mapped[float | None]
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
     watchlist_entry: Mapped["WatchlistEntry | None"] = relationship(

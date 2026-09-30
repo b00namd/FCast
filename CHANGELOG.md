@@ -4,6 +4,21 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Nach Phase 5 – Watchlist-Komfort & Chemstyle
+- **FUTBIN-Link reicht:** Die EA-ID wird aus dem Kartenbild der FUTBIN-Seite gelesen
+  (`p50579475.png` = Karten-ID bei Sonderkarten, `190042.png` = Spieler-ID = Karten-ID bei
+  Basiskarten). Alternativ akzeptiert das Feld eine Zahl oder einen FUT.GG-/FUTNext-Link.
+  Passen EA-ID und FUTBIN-Link nicht zur selben Karte, gibt es einen Fehler. Ist FUTBIN
+  pausiert, wird nicht nachgefragt.
+- **Chemstyle & Nutzung:** Empfohlener Chemstyle, gespielte Spiele und Tore/Spiel laut FUTBIN
+  für die eingestellte Plattform (neue Spalten in `players`). Aktualisierung bei jedem Lauf
+  aus der bereits geladenen Seite (keine zusätzlichen Anfragen). Anzeige in Watchlist und
+  Spielerdetail.
+- Kartentyp aus dem FUTBIN-Profiltext („Base Icon“, „Team of the Week“ …).
+- Tests: globaler Schutz gegen echte HTTP-Anfragen (`tests/conftest.py`); Web-Tests nutzen eine
+  FUTBIN-Quelle mit gespeicherten Seiten.
+- Fix: Spieler auf der Watchlist ließen sich nicht löschen (Cascade fehlte).
+
 ### Phase 5 – Push-Alerts
 - **ntfy statt Telegram** (Entscheidung des Nutzers): selbst gehostet auf dem Homeserver
   (`~/docker/ntfy`, Login-Pflicht, keine Weboberfläche). FCast sendet über die JSON-API mit

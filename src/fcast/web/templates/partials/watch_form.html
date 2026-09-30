@@ -7,9 +7,9 @@
     </div>
   {% endif %}
   <div class="grid">
-    <label>EA-ID oder FUT.GG-Link
-      <input name="ea_id" required placeholder="231747 oder https://www.fut.gg/players/…" value="{{ form.ea_id or '' }}">
-      <small class="muted">Der FUT.GG-Link enthält die Karten-ID (auch für Sonderkarten).</small>
+    <label>EA-ID oder FUT.GG-Link <small class="muted">(optional mit FUTBIN-Link)</small>
+      <input name="ea_id" placeholder="231747 oder https://www.fut.gg/players/…" value="{{ form.ea_id or '' }}">
+      <small class="muted">Leer lassen, wenn du unten einen FUTBIN-Link einträgst – FCast liest die ID dann dort aus.</small>
     </label>
     <label>Name <small class="muted">(optional)</small>
       <input name="name" placeholder="wird sonst automatisch ergänzt" value="{{ form.name or '' }}">
@@ -23,7 +23,7 @@
       <input name="sell" inputmode="decimal" placeholder="z. B. 1.400.000" value="{{ form.sell or '' }}">
     </label>
   </div>
-  <label>FUTBIN-Link <small class="muted">(optional, sonst nur FUTNext)</small>
+  <label>FUTBIN-Link <small class="muted">(empfohlen: exakte Preise, Angebotslage, Chemstyle)</small>
     <input name="futbin_url" type="url" placeholder="https://www.futbin.com/27/player/21487/maradona" value="{{ form.futbin_url or '' }}">
   </label>
   <label>Notiz

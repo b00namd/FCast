@@ -15,6 +15,7 @@ from fcast.alerts.config import AlertConfig, load_alert_config, save_alert_confi
 from fcast.alerts.notifier import Notification, NotifierError
 from fcast.analysis import service as analysis
 from fcast.analysis import signals as sig
+from fcast.collector.job import apply_player_info
 from fcast.collector.service import JOB_ID, Collector
 from fcast.config import Platform, Settings, is_clock_time
 from fcast.db import repositories as repo
@@ -22,6 +23,8 @@ from fcast.db.base import utcnow
 from fcast.db.models import Player
 from fcast.db.session import session_scope
 from fcast.sources import futbin
+from fcast.sources.base import PlayerInfo, PlayerNotFoundError, SourceError
+from fcast.sources.registry import make_http_client
 from fcast.web import forms, views
 
 logger = logging.getLogger(__name__)
@@ -206,10 +209,70 @@ def watchlist(request: Request) -> HTMLResponse:
         )
 
 
+class FutbinLookupError(Exception):
+    pass
+
+
+async def _resolve_futbin(request: Request, ref: str) -> PlayerInfo:
+    """Card details (incl. EA id) for a FUTBIN link; one polite request."""
+    settings = _settings(request)
+    collector = _collector(request)
+    with _db(request) as session:
+        if futbin.SOURCE_NAME in repo.paused_sources(session, utcnow()):
+            raise FutbinLookupError(
+                "FUTBIN ist gerade pausiert (Sperre). Bitte EA-ID oder FUT.GG-Link angeben."
+            )
+    source = next((s for s in collector.sources if isinstance(s, futbin.FutbinSource)), None)
+    temporary = source is None
+    if source is None:
+        source = futbin.FutbinSource(make_http_client(settings), lambda _: None, settings.platform)
+    try:
+        return await source.resolve_card(ref)
+    except PlayerNotFoundError as exc:
+        raise FutbinLookupError("FUTBIN-Seite nicht gefunden - Link prüfen.") from exc
+    except SourceError as exc:
+        raise FutbinLookupError(f"FUTBIN-Seite konnte nicht gelesen werden: {exc}") from exc
+    finally:
+        if temporary:
+            await source.aclose()
+
+
+async def _card_for(
+    request: Request, ea_id_text: str | None, futbin_ref: str | None
+) -> tuple[int | None, PlayerInfo | None, list[str]]:
+    """EA id from the id/link field and/or the FUTBIN link, checked for consistency."""
+    errors: list[str] = []
+    ea_id: int | None = None
+    if ea_id_text and ea_id_text.strip():
+        try:
+            ea_id = forms.parse_ea_id(ea_id_text)
+        except ValueError as exc:
+            return None, None, [str(exc)]
+    info: PlayerInfo | None = None
+    if futbin_ref is not None:
+        try:
+            info = await _resolve_futbin(request, futbin_ref)
+        except FutbinLookupError as exc:
+            if ea_id is None:
+                return None, None, [str(exc)]
+            # The EA id is known; the FUTBIN check is only a safety net.
+            logger.warning("FUTBIN lookup failed for %s: %s", futbin_ref, exc)
+        if info is not None and ea_id is not None and info.ea_id != ea_id:
+            errors.append(
+                f"Der FUTBIN-Link gehört zu einer anderen Karte (EA-ID {info.ea_id}) "
+                f"als die angegebene EA-ID {ea_id}."
+            )
+        elif info is not None:
+            ea_id = info.ea_id
+    if ea_id is None and not errors:
+        errors.append("Bitte EA-ID, FUT.GG-Link oder FUTBIN-Link angeben.")
+    return ea_id, info, errors
+
+
 @pages.post("/watchlist", response_model=None)
-def watchlist_add(
+async def watchlist_add(
     request: Request,
-    ea_id: FormStr,
+    ea_id: OptionalFormStr = None,
     name: OptionalFormStr = None,
     buy: OptionalFormStr = None,
     sell: OptionalFormStr = None,
@@ -226,13 +289,16 @@ def watchlist_add(
     }
     data = WatchInput(name, buy, sell, futbin_url, note)
     errors = list(data.errors)
-    try:
-        parsed_id = forms.parse_ea_id(ea_id)
-    except ValueError as exc:
-        errors.insert(0, str(exc))
+    parsed_id: int | None = None
+    info: PlayerInfo | None = None
+    if not errors:
+        parsed_id, info, errors = await _card_for(request, ea_id, data.futbin_ref)
     with _db(request) as session:
-        if not errors:
+        message = None
+        if not errors and parsed_id is not None:
             player = repo.upsert_player(session, parsed_id)
+            if info is not None:
+                apply_player_info(session, info)
             _apply_watch(session, player, data, update_refs=False)
             repo.set_watch_active(session, player, True)
             session.flush()
@@ -240,8 +306,6 @@ def watchlist_add(
             if data.warning:
                 message += f" Hinweis: {data.warning}"
             form = {}
-        else:
-            message = None
         if not _is_htmx(request):
             if errors:
                 return _render(
@@ -283,7 +347,7 @@ def watch_edit(request: Request, ea_id: int) -> HTMLResponse:
 
 
 @pages.post("/watchlist/{ea_id}", response_class=HTMLResponse)
-def watch_update(
+async def watch_update(
     request: Request,
     ea_id: int,
     name: OptionalFormStr = None,
@@ -293,12 +357,18 @@ def watch_update(
     note: OptionalFormStr = None,
 ) -> HTMLResponse:
     data = WatchInput(name, buy, sell, futbin_url, note)
+    errors = list(data.errors)
+    info: PlayerInfo | None = None
+    with _db(request) as session:
+        current = repo.get_source_ref(session, ea_id, futbin.SOURCE_NAME)
+    if not errors and data.futbin_ref is not None and data.futbin_ref != current:
+        _, info, errors = await _card_for(request, str(ea_id), data.futbin_ref)
     with _db(request) as session:
         context = _row_context(session, ea_id)
-        if data.errors:
-            return _render(
-                request, "partials/watch_row_edit.html", context | {"errors": data.errors}
-            )
+        if errors:
+            return _render(request, "partials/watch_row_edit.html", context | {"errors": errors})
+        if info is not None:
+            apply_player_info(session, info)
         _apply_watch(session, context["entry"].player, data, update_refs=True)
         session.flush()
         return _render(request, "partials/watch_row.html", _row_context(session, ea_id))

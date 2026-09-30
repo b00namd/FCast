@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -14,6 +15,8 @@ from fcast.config import Platform, Settings
 from fcast.db import repositories as repo
 from fcast.db.models import PriceSnapshot
 from fcast.sources.base import PlayerInfo, PlayerNotFoundError, PriceQuote, PriceSource
+from fcast.sources.futbin import FutbinSource
+from fcast.sources.http import PoliteHttpClient
 from fcast.web.app import create_app, format_coins, format_pct
 from fcast.web.forms import NBSP, parse_coins
 
@@ -49,6 +52,34 @@ def make_settings(tmp_path: Path, **overrides: object) -> Settings:
     return Settings(_env_file=None, **values)  # type: ignore[arg-type]
 
 
+FUTBIN_PAGES = {
+    "/27/player/21487/maradona": "21487-maradona.html",
+    "/27/player/22947/michael-olise": "22947-olise-totw.html",
+}
+FUTBIN_REQUESTS: list[str] = []
+
+
+def fixture_futbin(collector: Collector) -> FutbinSource:
+    """FUTBIN source that serves the saved pages from tests/fixtures/futbin (no network)."""
+    fixtures = Path(__file__).parent / "fixtures" / "futbin"
+    FUTBIN_REQUESTS.clear()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        FUTBIN_REQUESTS.append(request.url.path)
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nDisallow: /*?*\n")
+        page = FUTBIN_PAGES.get(request.url.path)
+        if page is None:
+            return httpx.Response(404)
+        return httpx.Response(200, text=(fixtures / page).read_text(encoding="utf-8"))
+
+    async def no_sleep(_: float) -> None:
+        return None
+
+    client = PoliteHttpClient("FCast/test", transport=httpx.MockTransport(handler), sleep=no_sleep)
+    return FutbinSource(client, lambda ea_id: collector._lookup_ref(ea_id, "futbin"), Platform.PC)
+
+
 @pytest.fixture
 def collector(tmp_path: Path) -> Collector:
     return Collector(make_settings(tmp_path), sources=[StaticSource({1: 1_000, 2: 2_000})])
@@ -56,6 +87,7 @@ def collector(tmp_path: Path) -> Collector:
 
 @pytest.fixture
 def client(tmp_path: Path, collector: Collector) -> Iterator[TestClient]:
+    collector.sources.append(fixture_futbin(collector))
     app = create_app(make_settings(tmp_path), collector=collector, run_scheduler=False)
     with TestClient(app) as test_client:
         test_client.auth = AUTH
@@ -610,3 +642,84 @@ def test_watchlist_add_with_futgg_link(client: TestClient, collector: Collector)
     assert "gespeichert" in response.text
     with collector.session_factory() as session:
         assert repo.get_source_ref(session, 50563395, "futbin") == "/27/player/99999/mbappe"
+
+
+# --- FUTBIN link only (EA id from the card image) --------------------------
+
+
+def test_watchlist_add_with_only_futbin_link_for_special_card(
+    client: TestClient, collector: Collector
+) -> None:
+    response = client.post(
+        "/watchlist",
+        data={"ea_id": "", "futbin_url": "https://www.futbin.com/27/player/22947/michael-olise"},
+        headers=HTMX,
+    )
+    assert "Michael Olise (91) gespeichert" in response.text
+    with collector.session_factory() as session:
+        player = repo.get_player_by_ea_id(session, 50579475)  # TOTW card id, not the player id
+        assert player is not None
+        assert (player.chem_style, player.games_used, player.goals_per_game) == (
+            "Hunter",
+            535,
+            0.802,
+        )
+        assert player.card_type == "Team of the Week"
+        assert repo.get_source_ref(session, 50579475, "futbin") == "/27/player/22947/michael-olise"
+    page = client.get("/players/50579475").text
+    assert "Hunter" in page
+    assert "535" in page
+
+
+def test_watchlist_add_rejects_mismatching_links(client: TestClient) -> None:
+    response = client.post(
+        "/watchlist",
+        data={
+            "ea_id": "https://www.fut.gg/players/231747-kylian-mbappe/27-231747/",
+            "futbin_url": "https://www.futbin.com/27/player/22947/michael-olise",
+        },
+        headers=HTMX,
+    )
+    assert "anderen Karte (EA-ID 50579475)" in response.text
+    assert "hx-swap-oob" not in response.text
+
+
+@pytest.mark.parametrize(
+    ("data", "error"),
+    [
+        ({"futbin_url": "https://www.futbin.com/27/player/1/unknown"}, "nicht gefunden"),
+        ({"ea_id": "", "futbin_url": ""}, "Bitte EA-ID, FUT.GG-Link oder FUTBIN-Link"),
+    ],
+)
+def test_watchlist_add_futbin_errors(client: TestClient, data: dict[str, str], error: str) -> None:
+    assert error in client.post("/watchlist", data=data, headers=HTMX).text
+
+
+def test_paused_futbin_is_not_asked(client: TestClient, collector: Collector) -> None:
+    with collector.session_factory.begin() as session:
+        repo.pause_source(session, "futbin", datetime.now(UTC) + timedelta(hours=5), "HTTP 429")
+    response = client.post(
+        "/watchlist",
+        data={"futbin_url": "https://www.futbin.com/27/player/21487/maradona"},
+        headers=HTMX,
+    )
+    assert "FUTBIN ist gerade pausiert" in response.text
+    assert FUTBIN_REQUESTS == []
+
+
+def test_edit_row_checks_new_futbin_link(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 190042)
+    bad = client.post(
+        "/watchlist/190042",
+        data={"futbin_url": "https://www.futbin.com/27/player/22947/michael-olise"},
+    )
+    assert "anderen Karte" in bad.text
+    good = client.post(
+        "/watchlist/190042",
+        data={"futbin_url": "https://www.futbin.com/27/player/21487/maradona"},
+    )
+    assert "Diego Maradona" in good.text
+    with collector.session_factory() as session:
+        player = repo.get_player_by_ea_id(session, 190042)
+        assert player is not None
+        assert player.chem_style == "Basic"  # PC recommendation from the page

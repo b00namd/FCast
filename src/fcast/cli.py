@@ -105,7 +105,10 @@ def db_upgrade(
 
 @watch_app.command("add")
 def watch_add(
-    ea_id: Annotated[int, typer.Argument(help="EA player/card id.", min=1)],
+    ea_id: Annotated[
+        int | None,
+        typer.Argument(help="EA card id; optional if --futbin is given.", min=1),
+    ] = None,
     buy: Annotated[int | None, typer.Option("--buy", help="Target buy price.", min=1)] = None,
     sell: Annotated[int | None, typer.Option("--sell", help="Target sell price.", min=1)] = None,
     note: Annotated[str | None, typer.Option("--note", help="Free-text note.")] = None,
@@ -119,16 +122,52 @@ def watch_add(
         ),
     ] = None,
 ) -> None:
-    """Add a player to the watchlist or update the existing entry."""
+    """Add a card to the watchlist (by EA id and/or FUTBIN link) or update it."""
+    from fcast.collector.job import apply_player_info
     from fcast.db import repositories as repo
     from fcast.sources import futbin as futbin_source
+    from fcast.sources.base import PlayerInfo, SourceError
+    from fcast.sources.registry import make_http_client
 
+    settings = get_settings()
     futbin_ref = None
     if futbin is not None:
         try:
             futbin_ref = futbin_source.normalize_ref(futbin)
         except ValueError as exc:
             raise typer.BadParameter(str(exc), param_hint="--futbin") from exc
+    if ea_id is None and futbin_ref is None:
+        raise typer.BadParameter("give an EA id or --futbin", param_hint="EA_ID")
+
+    info: PlayerInfo | None = None
+    if futbin_ref is not None:
+        source = futbin_source.FutbinSource(
+            make_http_client(settings), lambda _: None, settings.platform
+        )
+
+        async def _resolve() -> PlayerInfo:
+            try:
+                return await source.resolve_card(futbin_ref)
+            finally:
+                await source.aclose()
+
+        try:
+            info = asyncio.run(_resolve())
+        except SourceError as exc:
+            if ea_id is None:
+                typer.secho(f"Error: FUTBIN lookup failed: {exc}", fg=typer.colors.RED, err=True)
+                raise typer.Exit(1) from exc
+            typer.secho(f"Warning: FUTBIN lookup failed: {exc}", fg=typer.colors.YELLOW, err=True)
+        if info is not None and ea_id is not None and info.ea_id != ea_id:
+            typer.secho(
+                f"Error: the FUTBIN link belongs to card {info.ea_id}, not {ea_id}.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(1)
+    card_id = info.ea_id if info is not None else ea_id
+    if card_id is None:  # pragma: no cover - excluded by the checks above
+        raise typer.Exit(1)
 
     if buy is not None and sell is not None and sell * 0.95 <= buy:
         typer.secho(
@@ -137,12 +176,15 @@ def watch_add(
             err=True,
         )
     with _db_session() as session:
-        player = repo.upsert_player(session, ea_id, repo.PlayerDetails(name=name))
+        player = repo.upsert_player(session, card_id, repo.PlayerDetails(name=name))
+        if info is not None:
+            apply_player_info(session, info)
         repo.set_watch(session, player, target_buy=buy, target_sell=sell, note=note)
         if futbin_ref is not None:
             repo.set_source_ref(session, player, futbin_source.SOURCE_NAME, futbin_ref)
         typer.echo(
-            f"Watching {player.display_name}: buy {format_coins(buy)}, sell {format_coins(sell)}"
+            f"Watching {player.display_name} [{card_id}]: "
+            f"buy {format_coins(buy)}, sell {format_coins(sell)}"
         )
 
 

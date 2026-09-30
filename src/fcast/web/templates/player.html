@@ -13,6 +13,12 @@
     {% if d.refs.futbin %} · <a href="https://www.futbin.com{{ d.refs.futbin }}" target="_blank" rel="noreferrer">FUTBIN</a>{% endif %}
     · <a href="https://www.futnext.com/players/p/{{ d.player.ea_id }}" target="_blank" rel="noreferrer">FUTNext</a>
   </p>
+  {% if d.player.chem_style or d.player.games_used %}
+  <p>
+    {% if d.player.chem_style %}Chemstyle ({{ platform_label }}): <strong>{{ d.player.chem_style }}</strong>{% endif %}
+    {% if d.player.games_used %}<span class="muted"> · {{ d.player.games_used | coins }} Spiele{% if d.player.goals_per_game is not none %}, {{ "%.2f" | format(d.player.goals_per_game) | replace(".", ",") }} Tore/Spiel{% endif %} (laut FUTBIN)</span>{% endif %}
+  </p>
+  {% endif %}
 </hgroup>
 
 <div class="stats">

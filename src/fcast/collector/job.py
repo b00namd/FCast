@@ -64,6 +64,9 @@ def apply_player_info(session: Session, info: PlayerInfo) -> Player:
             league=info.league,
             nation=info.nation,
             club=info.club,
+            chem_style=info.chem_style,
+            games_used=info.games_used,
+            goals_per_game=info.goals_per_game,
         ),
     )
 
@@ -106,6 +109,11 @@ class PlayerFetch:
     @property
     def extinct(self) -> bool:
         return any(observation.market.extinct for observation in self.markets)
+
+    @property
+    def answered_by(self) -> set[str]:
+        """Sources that delivered a price or a market picture for this card."""
+        return {q.source for q in self.quotes} | {m.source for m in self.markets}
 
 
 def _dampen_outlier(quote: PriceQuote, outlier_gap_pct: float) -> PriceQuote:
@@ -232,8 +240,16 @@ async def collect_once(
     for index, (ea_id, needs_details) in enumerate(targets):
         ordered = source_order(active, rotation + index if rotate else 0)
         fetch = await _collect_quotes(ordered, ea_id, platform, result, outlier_gap_pct)
-        # After the price so that remote sources can answer from their page cache.
-        info = await _first_player_info(ordered, ea_id, result) if needs_details else None
+        # After the price so that remote sources can answer from their page cache. Unknown
+        # cards ask every source; known cards only refresh usage data (chem style, games)
+        # from the remote source that just answered, which costs no extra request.
+        answered = fetch.answered_by
+        detail_sources = (
+            sorted(ordered, key=lambda source: source.name not in answered)
+            if needs_details
+            else [s for s in ordered if s.remote and s.name in answered]
+        )
+        info = await _first_player_info(detail_sources, ea_id, result)
         if fetch.extinct:
             result.extinct.append(ea_id)
         elif not fetch.quotes:

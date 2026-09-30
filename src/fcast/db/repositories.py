@@ -56,6 +56,9 @@ class PlayerDetails:
     league: str | None = None
     nation: str | None = None
     club: str | None = None
+    chem_style: str | None = None
+    games_used: int | None = None
+    goals_per_game: float | None = None
 
 
 def get_player_by_ea_id(session: Session, ea_id: int) -> Player | None:

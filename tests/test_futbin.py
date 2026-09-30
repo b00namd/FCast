@@ -99,7 +99,7 @@ def test_parse_player() -> None:
     assert info.name == "Diego Maradona"
     assert info.rating == 95
     assert info.position == "CAM"
-    assert info.card_type == "Icon"
+    assert info.card_type == "Base Icon"
     assert (info.league, info.nation, info.club) == ("Icons", "Argentina", "EA FC ICONS")
 
     muller = parse_player(MULLER, 190048)

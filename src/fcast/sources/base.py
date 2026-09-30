@@ -68,6 +68,10 @@ class PlayerInfo:
     league: str | None = None
     nation: str | None = None
     club: str | None = None
+    # Usage data for the configured platform (FUTBIN only)
+    chem_style: str | None = None
+    games_used: int | None = None
+    goals_per_game: float | None = None
 
 
 class PriceSource(ABC):

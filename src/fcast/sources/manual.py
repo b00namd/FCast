@@ -92,11 +92,16 @@ def parse_csv(
         captured_at = _parse_timestamp(timestamp, local_tz, line) if timestamp else fallback_time
 
         rating_value = record.get("rating", "")
-        details = {field: record.get(field) or None for field in _DETAIL_FIELDS}
+        fields = {field: record.get(field) or None for field in _DETAIL_FIELDS}
         player = PlayerInfo(
             ea_id=ea_id,
             rating=_parse_int(rating_value, "rating", line) if rating_value else None,
-            **details,
+            name=fields["name"],
+            position=fields["position"],
+            card_type=fields["card_type"],
+            league=fields["league"],
+            nation=fields["nation"],
+            club=fields["club"],
         )
         quote = PriceQuote(
             ea_id=ea_id, platform=platform, price=price, source=source, captured_at=captured_at

@@ -30,3 +30,14 @@ def db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     get_settings.cache_clear()
     yield path
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _no_live_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests must never talk to real websites (CLAUDE.md). Mock transports still work."""
+    import httpx
+
+    async def refuse(self: httpx.AsyncHTTPTransport, request: httpx.Request) -> httpx.Response:
+        raise RuntimeError(f"live HTTP request in a test: {request.method} {request.url}")
+
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", refuse)
