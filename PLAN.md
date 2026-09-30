@@ -4,107 +4,60 @@ Jede Phase ist in sich abgeschlossen und endet mit Abnahmekriterien.
 Reihenfolge einhalten, Phase für Phase.
 Ab Phase 3 gilt: Jede neue Funktion bekommt direkt auch eine Ansicht bzw. Bedienung in der Weboberfläche.
 
----
-
-## Phase 0 – Projekt-Setup
-**Aufgaben**
-- Repo-Struktur laut `CLAUDE.md` anlegen, `uv init`, Abhängigkeiten installieren
-- `ruff`, `mypy`, `pytest` konfigurieren (`pyproject.toml`)
-- `config.py` mit `pydantic-settings`: `FCAST_PLATFORM`, `FCAST_DB_PATH`, `FCAST_TELEGRAM_TOKEN`,
-  `FCAST_TELEGRAM_CHAT_ID`, `FCAST_COLLECT_INTERVAL_MIN` (Default 30)
-- `.env.example`, `.gitignore`, `Dockerfile`, `docker-compose.yml` (Volume für die SQLite-DB)
-- Typer-CLI mit `fcast --version`
-
-**Abnahme**
-- `uv run pytest`, `ruff check .` und `mypy src` laufen grün
-- `docker compose up` startet einen Container, der die Version ausgibt
+**Schwerpunkt (seit 30.09.2026): Spekulation.** FCast soll zeigen, welche Karten durch Leaks, Promos
+und TOTW steigen könnten und welche sich überteuert verkaufen lassen (ÜV, Holo). Portfolio und
+SBC-Futter sind nachrangig.
 
 ---
 
-## Phase 1 – Datenmodell & Datenbank
-**Tabellen**
-- `players`: id, ea_id (unique), name, rating, position, card_type, league, nation, club, updated_at
-- `price_snapshots`: id, player_id, platform, price, source, captured_at (Index auf player_id + captured_at)
-- `watchlist`: player_id, target_buy, target_sell, note, active
-- `portfolio`: id, player_id, buy_price, bought_at, sell_price, sold_at, status (holding/listed/sold)
-- `promos`: id, name, starts_at, ends_at, source, confidence (0–1), note
-- `promo_links`: promo_id, link_type (player/league/nation/club), link_value
-- `alerts_log`: id, rule, player_id, message, sent_at
+## ✅ Phase 0 – Projekt-Setup (erledigt)
+uv-Projekt, Tooling (ruff, mypy strict, pytest), Settings, Typer-CLI, Docker.
 
-**Aufgaben**
-- SQLAlchemy-Modelle, Alembic-Init und erste Migration
-- Repository-Funktionen (CRUD) mit Tests gegen eine In-Memory-SQLite
-- CLI: `fcast watch add <ea_id> --buy X --sell Y`, `fcast watch list`
+## ✅ Phase 1 – Datenmodell & Datenbank (erledigt)
+Tabellen `players`, `price_snapshots`, `watchlist`, `portfolio`, `promos`, `promo_links`, `alerts_log`,
+Alembic-Migrationen, Repositories, CLI `fcast watch`.
 
-**Abnahme**
-- Migration läuft auf einer frischen DB
-- CRUD-Tests grün
+## ✅ Phase 2 – Preisquellen & Collector (erledigt)
+`ManualSource` (CSV), FUTBIN (erste Wahl), FUTNext (Ersatz), höflicher HTTP-Client, Collector mit
+Scheduler, automatischer Rückzug bei Sperren (`source_status`). Details: `docs/sources.md`.
+
+## ✅ Phase 3 – Basis-Weboberfläche (erledigt)
+`fcast serve` (Dashboard + Collector in einem Prozess), Basic Auth, Übersicht, Watchlist,
+Spielerdetail mit Chart und „Preis erfassen“, Status mit „Jetzt sammeln“.
 
 ---
 
-## Phase 2 – Preisquellen & Collector
-**Aufgaben**
-- Interface `PriceSource` mit `async fetch_price(ea_id, platform) -> PriceQuote`
-  und `async fetch_player(ea_id) -> PlayerInfo`
-- `ManualSource` (CSV-Import) als erste, risikofreie Quelle
-- Erster Web-Adapter (z. B. FUT.GG). Vorher `robots.txt` und Nutzungsbedingungen prüfen und das Ergebnis im PR notieren.
-  Rate-Limiter (≤ 1 Req/3 s pro Host), Retry mit Backoff, Response-Cache (5 Min.)
-- Collector-Job: holt Preise für alle aktiven Watchlist-Spieler und speichert Snapshots
-- APScheduler-Integration, Intervall aus der Config
-- CLI: `fcast collect --once`
-
-**Abnahme**
-- Adapter-Tests laufen ausschließlich gegen Fixtures
-- `fcast collect --once` schreibt Snapshots in die DB
-- Fehler einer Quelle stoppen den Collector nicht (Logging + Weiterlaufen)
-
----
-
-## Phase 3 – Basis-Weboberfläche
-**Aufgaben**
-- FastAPI-App im selben Container wie Collector und Scheduler (ein Prozess, Scheduler im Lifespan starten)
-- Port 8000 in `docker-compose.yml` freigeben, Basic Auth (Credentials aus `.env`:
-  `FCAST_WEB_USER`, `FCAST_WEB_PASSWORD`)
-- Jinja2 + HTMX, schlichtes responsives Layout (Pico.css oder eigenes CSS, keine Build-Pipeline)
-- Seiten:
-  - **Watchlist:** Spieler hinzufügen (EA-ID, Ziel-Kaufpreis, Ziel-Verkaufspreis), bearbeiten, deaktivieren
-  - **Preisübersicht:** Tabelle aller Watchlist-Spieler mit letztem Preis, Zeitpunkt, Änderung zu 24 h
-  - **Spielerdetail:** Preis-Chart der letzten 7 Tage (Chart.js)
-  - **Status:** letzter Collector-Lauf, Fehler pro Quelle, Button „Jetzt sammeln“
-- Healthcheck-Endpunkt `/health` für Docker
-
-**Abnahme**
-- `docker compose up` → Dashboard unter `http://<host>:8000` erreichbar, Login erforderlich
-- Watchlist komplett im Browser pflegbar, Preise und Chart sichtbar
-- Route-Tests mit FastAPI-TestClient
-
----
-
-## Phase 4 – Marktanalyse
-**Aufgaben** (`analysis/stats.py`, `analysis/signals.py`)
-- Utilities: `round_to_price_step()`, `net_after_tax()`, `profit()`
-- Kennzahlen pro Spieler: 24-h- und 7-Tage-Mittel, Median, Min/Max, Standardabweichung,
-  Abweichung aktueller Preis vs. 7-Tage-Mittel in %, Volatilität
-- Liquiditäts-Proxy: Anzahl Preisänderungen pro Tag
-- Tageszeit- und Wochentagsprofil (Durchschnittspreis je Stunde/Wochentag)
-- Signal `BUY_DIP`: Preis ≥ X % unter 7-Tage-Mittel **und** Profit nach Steuer ≥ Mindestmarge
-- Signal `SELL_TARGET`: Preis ≥ Zielpreis der Watchlist bzw. des Portfolios
+## Phase 4 – Marktanalyse & Angebotslage
+**Aufgaben** (`analysis/stats.py`, `analysis/market.py`, `analysis/signals.py`)
+- Utilities: `round_to_price_step()`, `net_after_tax()`, `profit()` (Preisstufen laut `CLAUDE.md`)
+- Kennzahlen pro Karte: 24-h- und 7-Tage-Mittel, Median, Min/Max, Standardabweichung,
+  Abweichung aktueller Preis vs. 7-Tage-Mittel in %, Volatilität, Liquiditäts-Proxy
+- Tageszeit- und Wochentagsprofil
+- **Angebotslage** (neu, aus FUTBIN): alle fünf günstigsten Angebote speichern, dazu EA-Preisspanne
+  (Min/Max). Daraus: Lücke zwischen 1. und 2. Angebot („dünnes Angebot“), Luft bis EA-Maximum,
+  Status **extinct** (kein Angebot) als eigener Zustand statt Ersatzpreis
+- Ausreißer abfedern: Einzelangebote weit unter dem 2. Angebot nicht als Marktpreis werten
+- **ÜV-Score** (überteuert verkaufen): hoch bei dünnem Angebot, steigendem Trend, viel Luft bis
+  EA-Maximum; Empfehlung „einstellen zu X“ (auf Preisstufe gerundet, Profit nach Steuer)
+- Signale `BUY_DIP`, `SELL_TARGET`, `OVERPRICE_CHANCE`
+- Dashboard: Kennzahlen und Angebotslage im Spielerdetail, Signalliste mit Filter
 - CLI: `fcast analyze <ea_id>`, `fcast signals`
 
 **Abnahme**
-- Unit-Tests mit synthetischen Preisreihen (Dip, Spike, flach, Lücken in den Daten)
+- Unit-Tests mit synthetischen Reihen (Dip, Spike, flach, Lücken, Ausreißer, extinct)
 - Preisstufen-Rundung ist mit Grenzwerten getestet
+- ÜV-Score ist deterministisch, Gewichte liegen in der Config
 
 ---
 
 ## Phase 5 – Telegram-Alerts
 **Aufgaben**
-- Telegram-Client (`sendMessage`, Markdown-Formatierung)
-- Alert-Engine: Signale → Nachrichten, Cooldown pro Spieler und Regel (Default 6 h),
-  Deduplizierung über `alerts_log`
-- Nachricht enthält: Spieler, aktueller Preis, Ø 7 Tage, empfohlener Max-Kaufpreis,
-  erwarteter Profit nach Steuer
-- Ruhezeiten konfigurierbar (z. B. 00–07 Uhr keine Alerts)
+- Telegram-Client (`sendMessage`, Markdown), Alert-Engine: Signale → Nachrichten
+- Cooldown pro Karte und Regel (Default 6 h), Deduplizierung über `alerts_log`, Ruhezeiten
+- Nachricht: Karte, aktueller Preis, Ø 7 Tage, Empfehlung (Kauf-Max bzw. Einstellpreis),
+  erwarteter Profit nach Steuer, Link zum Dashboard
+- Systemmeldungen: Quelle pausiert (403/429/Challenge), Collector-Fehler
+- Dashboard: Alert-Einstellungen (Cooldown, Ruhezeiten, Mindestmarge), Alert-Verlauf
 - CLI: `fcast alert test`
 
 **Abnahme**
@@ -113,71 +66,55 @@ Ab Phase 3 gilt: Jede neue Funktion bekommt direkt auch eine Ansicht bzw. Bedien
 
 ---
 
-## Phase 6 – Portfolio & Profit
+## Phase 6 – Leak- & Promo-Radar
 **Aufgaben**
-- CLI: `fcast buy <ea_id> <preis>`, `fcast list <id> <preis>`, `fcast sell <id> <preis>`
-- Auswertung: offene Positionen mit aktuellem Wert, realisierter Profit (nach Steuer),
-  Gewinn pro Tag/Woche, beste und schlechteste Trades
-- Verkaufsempfehlung für offene Positionen (nutzt `SELL_TARGET` und Trend)
-- Risiko-Limit: Warnung, wenn eine Position > X % des erfassten Coin-Bestands ausmacht
+- **Leak-Eingang:** Einträge aus erlaubten Quellen sammeln – offizielle Reddit-API (Posts mit
+  Leak-Bezug), RSS-Feeds von FUT-News-Seiten (je Quelle vorher prüfen, Ergebnis in
+  `docs/sources.md`). X/Twitter nur manuell bzw. über Recherche auf Zuruf (kein Login, kein Scraping).
+- Einfügen-Hilfe: Leak-Text ins Dashboard kopieren → FCast erkennt Spieler/Ligen/Nationen/Vereine
+  und schlägt einen Promo-Eintrag vor, der bestätigt oder verworfen wird
+- Promos mit Zeitraum, Quelle, Konfidenz (0–1) und Links (Spieler/Liga/Nation/Verein) pflegen
+- **Kandidaten-Pool:** Karten, die von einem Leak betroffen sind, automatisch mitverfolgen –
+  mit geringerer Frequenz als die Watchlist (Default 1–2 Abrufe pro Tag), Obergrenze pro Tag
+- **Link-Scoring:** Score pro Karte aus Treffer mit geleakten Karten (Spieler > Verein > Liga > Nation),
+  Zeit bis Promo-Start, Konfidenz, Preis vs. 7-Tage-Mittel, Liquidität, Angebotslage
+- Signal `PROMO_PREBUY` (Score über Schwelle, Start in 2–7 Tagen)
+- Dashboard: Leak-Eingang, Promo-Kalender, Top-Kandidaten mit Begründung („gleiche Liga wie X“)
 
 **Abnahme**
-- Profitberechnung mit Steuer ist getestet
-- `fcast portfolio` zeigt eine übersichtliche Tabelle (`rich`)
+- Scoring ist deterministisch und getestet, Gewichte liegen in der Config
+- Kandidaten-Abrufe halten Frequenz und Tageslimit ein (Test)
+- Parser für Leak-Texte ist mit Beispieltexten getestet (Fixtures)
 
 ---
 
-## Phase 7 – Dashboard-Ausbau
+## Phase 7 – TOTW- & Holo-Spekulation
 **Aufgaben**
-- Übersichtsseite mit allen aktiven Signalen (BUY_DIP, SELL_TARGET) und Filter
-- Spielerdetail erweitern: Kennzahlen aus Phase 4, Tageszeit- und Wochentagsprofil, 30-Tage-Chart
-- Portfolio-Seite: Positionen erfassen, Verkauf buchen, Profit-Übersicht
-- Alert-Einstellungen im Browser (Cooldown, Ruhezeiten, Mindestmarge)
-- Platzhalter-Seite für den Promo-Kalender (wird in Phase 8 gefüllt)
+- **Recherche zuerst:** Wie funktionieren Holo-Karten in FC 27 (Varianten, Erscheinen, Preisbezug)?
+  Ergebnis in `docs/` festhalten, Beispiele als Fixtures
+- **Kartenpaare:** normale Karte ↔ Holo-Variante (bzw. Gold ↔ TOTW) verknüpfen; Preisabstand,
+  Angebotslage der normalen Karte, Signal `HOLO_SPREAD` (normale Karte knapp, Abstand groß)
+- **TOTW-Prognose:** echte Spieldaten des Wochenendes (Tore, Vorlagen, Noten) über eine offizielle API
+  mit Free-Tier (z. B. API-Football; Nutzungsbedingungen vorher prüfen) → Kandidatenliste bis
+  Montag/Dienstag, damit vor der TOTW-Veröffentlichung (mittwochs) gekauft werden kann
+- Auswertung nach Veröffentlichung: Trefferquote der Prognose, Preisreaktion der normalen Karten
+- Dashboard: TOTW-Kandidaten, Holo-Paare mit Spread, Trefferquote
 
 **Abnahme**
-- Alle Funktionen aus Phase 4–6 sind ohne CLI im Browser bedienbar
-- Endpunkte sind getestet, die Seiten funktionieren auf dem Smartphone
+- Prognose und Spread-Berechnung sind mit Fixtures getestet
+- API-Aufrufe bleiben im Free-Tier-Limit (Test mit Zähler)
 
 ---
 
-## Phase 8 – Promo-Radar
+## Phase 8 – Backtesting & Lernen aus Promos
 **Aufgaben**
-- Promos und Links manuell pflegen (Dashboard + CLI `fcast promo add ...`), Konfidenz je Eintrag
-- Optionaler Import-Adapter für Leak-Quellen (gleiche Regeln wie Phase 2, zuerst prüfen)
-- **Link-Scoring:** Für jeden Spieler einen Score berechnen aus
-  - geteilter Liga/Nation/Verein mit geleakten Promo-Karten
-  - Zeit bis zum Promo-Start
-  - Konfidenz des Leaks
-  - aktueller Preis vs. 7-Tage-Mittel (günstig = besser)
-  - Liquidität
-- Signal `PROMO_PREBUY`: Score über Schwelle und Promo-Start in 2–7 Tagen
-- Kalender-Ansicht mit Wochenmustern (Weekend League, TOTW, Promo-Start)
-
-**Abnahme**
-- Scoring-Funktion ist deterministisch und getestet, die Gewichte liegen in der Config
-- Dashboard zeigt die Top 20 Promo-Kandidaten mit Begründung („gleiche Liga wie X“)
-
----
-
-## Phase 9 – SBC-Futter-Tracker
-**Aufgaben**
-- Günstigste Preise je Rating-Stufe (82–90) tracken, dazu passende Referenzspieler automatisch wählen
-- Trend je Stufe, Signal `FODDER_STOCK`, wenn eine Stufe unter ihrem 14-Tage-Mittel liegt
-- Dashboard-Widget „Futter-Index“
-
-**Abnahme**
-- Futter-Index wird pro Collector-Lauf aktualisiert, Tests mit Fixtures
-
----
-
-## Phase 10 – Backtesting
-**Aufgaben**
-- Engine, die Signale auf historischen Snapshots simuliert
-  (Kauf zum Snapshot-Preis, Verkauf nach Regel oder Haltedauer, Steuer einrechnen)
+- Engine, die Signale auf historischen Snapshots simuliert (Kauf zum Snapshot-Preis, Verkauf nach
+  Regel oder Haltedauer, Steuer einrechnen)
+- **Promo-Verläufe:** Preisreaktion betroffener Karten vor/nach Promo-Start und TOTW-Release
+  automatisch auswerten (z. B. Ø-Änderung T-3 bis T+2)
 - Kennzahlen: Trefferquote, Ø Profit pro Trade, Max-Drawdown, Kapitalbindung
-- Parameter-Sweep für Schwellen (z. B. Dip-% 10/15/20/25)
-- CLI: `fcast backtest --rule BUY_DIP --from ... --to ...`, Report im Dashboard
+- Parameter-Sweep für Schwellen und Scoring-Gewichte
+- CLI: `fcast backtest --rule PROMO_PREBUY --from ... --to ...`, Report im Dashboard
 
 **Abnahme**
 - Tests mit konstruierten Reihen, bei denen das Ergebnis bekannt ist
@@ -186,14 +123,12 @@ Ab Phase 3 gilt: Jede neue Funktion bekommt direkt auch eine Ansicht bzw. Bedien
 ---
 
 ## Später / Ideen-Backlog
-- Sentiment-Signal (Reddit/YouTube-Titel nach Spielernamen, Hype-Score)
-- Kartenbewertung (Stats, AcceleRATE, Playstyles) als Faktor im Scoring
-- SBC-Lösungsrechner mit eigenem Club (Import per CSV)
+- **Portfolio & Profit** (bisher Phase 6): Käufe/Verkäufe erfassen, realisierter Profit nach Steuer,
+  offene Positionen, Verkaufsempfehlung, Risiko-Limit
+- **SBC-Futter-Tracker** (bisher Phase 9): günstigste Preise je Rating-Stufe 82–90, Signal `FODDER_STOCK`
+- Sentiment-Signal (Reddit-Titel nach Spielernamen, Hype-Score)
+- Kartenbewertung (Stats, AcceleRATE, PlayStyles) als Faktor im Scoring
+- SBC-Lösungsrechner mit eigenem Club (Import per CSV, kein EA-Login)
 - Selbstlernende Gewichtung: Signale anhand ihrer Trefferquote aus dem Backtesting nachjustieren
 - Backup der SQLite-DB (Cronjob oder in bestehendes Backup-Konzept einhängen)
-
----
-
-## Start-Prompt für Claude Code
-> Lies `CLAUDE.md` und `PLAN.md`. Setze Phase 0 um. Zeig mir zuerst kurz deinen Plan,
-> dann implementiere. Stoppe nach Phase 0 und fasse zusammen, was fertig ist und was ich prüfen soll.
+- Zugriff von unterwegs über VPN (WireGuard in der Fritzbox)

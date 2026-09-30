@@ -63,6 +63,12 @@ fcast/
   bis 1.000 → 50er-Schritte; 1.000–10.000 → 100er; 10.000–50.000 → 250er;
   50.000–100.000 → 500er; ab 100.000 → 1.000er. Alle empfohlenen Preise auf gültige Stufen runden.
 - **Plattform** ist konfigurierbar (`FCAST_PLATFORM`). Preise verschiedener Plattformen nie mischen.
+- **ÜV** = „überteuert verkaufen“: Karte deutlich über dem niedrigsten Sofortkauf einstellen, lohnt sich
+  bei dünnem Angebot, steigender Nachfrage und genug Luft bis zum EA-Höchstpreis.
+- **Holo** = besondere, wertvollere Variante einer Karte (z. B. zu einer normalen TOTW-Karte). Idee: die
+  normale Karte zum Preis der Holo-Variante verkaufen, wenn die normale knapp ist.
+- **extinct** = keine Angebote auf dem Markt; ist ein eigenes Signal, kein fehlender Preis.
+- Schwerpunkt des Projekts ist Spekulation (Leaks, Promos, TOTW, ÜV/Holo), siehe `PLAN.md`.
 - Typische Marktmuster: Einbruch zum Promo-Start (meist Freitagabend), Hochs zur Weekend League,
   steigende Preise für SBC-Futter (Ratings 82–88) vor großen SBCs.
 
