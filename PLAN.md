@@ -27,7 +27,7 @@ Spielerdetail mit Chart und „Preis erfassen“, Status mit „Jetzt sammeln“
 
 ---
 
-## Phase 4 – Marktanalyse & Angebotslage
+## ✅ Phase 4 – Marktanalyse & Angebotslage (erledigt)
 **Aufgaben** (`analysis/stats.py`, `analysis/market.py`, `analysis/signals.py`)
 - Utilities: `round_to_price_step()`, `net_after_tax()`, `profit()` (Preisstufen laut `CLAUDE.md`)
 - Kennzahlen pro Karte: 24-h- und 7-Tage-Mittel, Median, Min/Max, Standardabweichung,
