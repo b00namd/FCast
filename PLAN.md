@@ -80,7 +80,7 @@ Einstellungen, Verlauf und Test-Push; CLI `fcast alert test|check`.
 
 ---
 
-## Phase 7 – TOTW- & Holo-Spekulation
+## ✅ Phase 7 – TOTW- & Holo-Spekulation (erledigt; Spielnoten folgen mit API-Football Pro)
 > **Stand 30.09.2026:** TOTW-Prognose v1 vorgezogen und umgesetzt (OpenLigaDB, Auswertung über FUTBIN,
 > Seite „TOTW“, Alert). Offen: Spielnoten/Vorlagen (API-Football Pro), Reddit (nach Freigabe),
 > Holo-Paare.

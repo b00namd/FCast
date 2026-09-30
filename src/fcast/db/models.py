@@ -339,3 +339,20 @@ class PoolCard(Base):
     until: Mapped[datetime] = mapped_column(UTCDateTime)
 
     player: Mapped[Player] = relationship()
+
+
+class CardPair(Base):
+    """A card and its holographic version (None if checked and none exists yet)."""
+
+    __tablename__ = "card_pairs"
+
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.id", ondelete="CASCADE"), primary_key=True
+    )
+    holo_player_id: Mapped[int | None] = mapped_column(
+        ForeignKey("players.id", ondelete="SET NULL")
+    )
+    checked_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    player: Mapped[Player] = relationship(foreign_keys=[player_id])
+    holo: Mapped[Player | None] = relationship(foreign_keys=[holo_player_id])

@@ -981,3 +981,24 @@ def test_promo_validation_and_actions(client: TestClient, collector: Collector) 
     client.post(f"/promos/{promo_id}/delete")
     with collector.session_factory() as session:
         assert session.scalars(select(Promo)).all() == []
+
+
+def test_player_page_shows_holo_version(client: TestClient, collector: Collector) -> None:
+    from fcast.db.models import CardPair
+
+    now = datetime.now(UTC)
+    add_watch(collector, 50579475)
+    with collector.session_factory.begin() as session:
+        normal = repo.get_player_by_ea_id(session, 50579475)
+        assert normal is not None
+        holo = repo.upsert_player(
+            session, 67356691, repo.PlayerDetails(name="Olise", card_type="TOTW (Holo)")
+        )
+        session.add(CardPair(player_id=normal.id, holo_player_id=holo.id))
+        repo.add_snapshot(session, normal, Platform.PC, 1_000_000, "futbin", now)
+        repo.add_snapshot(session, holo, Platform.PC, 2_000_000, "futbin", now)
+    page = client.get("/players/50579475").text
+    assert "Holo-Version" in page
+    assert "/players/67356691" in page
+    assert "+100,0 %" in page
+    assert "Holo-ÜV" in page  # signal: normal card could be listed just below the holo

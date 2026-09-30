@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Phase 7 – Holo-Paare (TOTW-Prognose siehe unten)
+- Recherche zu Holo-/Pristine-Karten in `docs/holo.md`; Fixture der Olise-TOTW-Holo-Seite.
+- FUTBIN: Versionsliste und Holo-Erkennung (`parse_versions`, `is_holo_page`); Holo-EA-ID = normale
+  EA-ID + 2²⁴.
+- Paarbildung für Watchlist-Karten (Tabelle `card_pairs`), Holo-Partner werden alle 2 h bepreist.
+- Signal `HOLO_SPREAD` („Holo-ÜV“): normale Karte knapp unter dem Holo-Preis einstellen, Profit nach
+  Steuer; in Signalen, Alerts (abschaltbar) und im Spielerdetail (Abschnitt „Holo-Version“).
+
 ### Phase 6 – Leak- & Promo-Radar
 - **Leak-Eingang:** RSS-Feeds von FIFA UTeam und RealSport101 (robots.txt erlaubt, Feeds sind für
   Reader gedacht), alle 6 h; nur FC-/Ultimate-Team-Artikel mit Promo-/Leak-Bezug, Leaks markiert.

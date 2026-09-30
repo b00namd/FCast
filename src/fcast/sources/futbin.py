@@ -295,3 +295,50 @@ class FutbinSource(PriceSource):
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+
+# --- card versions & holographic cards ---------------------------------------------
+
+HOLO_ID_OFFSET = 1 << 24  # EA id of a holo card = id of its normal card + 2^24
+_HOLO_CLASS_RE = re.compile(r"^playercard-\d+-holo$")
+_VERSION_PATH_RE = re.compile(r"^/\d{2}/player/(\d+)/[^/]+$")
+
+
+@dataclass(frozen=True)
+class CardVersion:
+    path: str
+    futbin_id: int
+    rating: int | None
+    holo: bool
+
+
+def is_holo_page(html: str) -> bool:
+    """True if the page's main card is a holographic version."""
+    tree = HTMLParser(html)
+    for node in tree.css(".playercard-option-wrapper [class*='-holo']"):
+        if any(_HOLO_CLASS_RE.match(c) for c in (node.attributes.get("class") or "").split()):
+            return True
+    return False
+
+
+def parse_versions(html: str) -> list[CardVersion]:
+    """The other versions of the player listed on a card page."""
+    tree = HTMLParser(html)
+    versions = []
+    seen: set[str] = set()
+    for link in tree.css("a.player-card-preview"):
+        path = link.attributes.get("href") or ""
+        match = _VERSION_PATH_RE.match(path)
+        if match is None or path in seen:
+            continue
+        seen.add(path)
+        rating_text = re.sub(r"\D", "", link.text(strip=True))
+        versions.append(
+            CardVersion(
+                path=path,
+                futbin_id=int(match[1]),
+                rating=int(rating_text) if rating_text else None,
+                holo=link.css_first(".player-rating-card-holo") is not None,
+            )
+        )
+    return versions

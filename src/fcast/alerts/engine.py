@@ -75,6 +75,7 @@ _STYLE = {
     sig.Rule.OVERPRICE_CHANCE: (Priority.HIGH, "moneybag"),
     sig.Rule.SELL_TARGET: (Priority.DEFAULT, "dart"),
     sig.Rule.PROMO_PREBUY: (Priority.HIGH, "crystal_ball"),
+    sig.Rule.HOLO_SPREAD: (Priority.HIGH, "sparkles"),
 }
 
 
@@ -86,6 +87,10 @@ def signal_notification(
         lines.append(f"Kaufen bis max. {_coins(signal.recommended)}")
     elif signal.rule is sig.Rule.PROMO_PREBUY:
         lines.append("Vor dem Promo-Start kaufen, nach dem Start teurer verkaufen")
+    elif signal.rule is sig.Rule.HOLO_SPREAD:
+        lines.append(
+            f"Normale Karte knapp unter Holo-Preis einstellen: {_coins(signal.recommended)}"
+        )
     else:
         lines.append(f"Einstellen zu {_coins(signal.recommended)}")
     if signal.expected_profit is not None:
@@ -213,6 +218,7 @@ class AlertEngine:
             sig.Rule.SELL_TARGET.value: config.sell_target,
             sig.Rule.OVERPRICE_CHANCE.value: config.overprice,
             sig.Rule.PROMO_PREBUY.value: config.promo,
+            sig.Rule.HOLO_SPREAD.value: config.holo,
         }.get(candidate.rule, True)
 
     def evaluate(

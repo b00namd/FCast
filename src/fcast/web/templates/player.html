@@ -75,6 +75,19 @@
   </div>
 </div>
 
+{% if a.holo_player %}
+<h3>Holo-Version</h3>
+<p>
+  <a href="/players/{{ a.holo_player.ea_id }}">{{ a.holo_player.display_name }}</a>
+  <span class="badge">Holo</span>
+  · Preis {% if a.holo and a.holo.price %}{{ a.holo.price | coins }}{% else %}–{% endif %}
+  {% if a.holo and a.holo.extinct %}<span class="badge bad">extinct</span>{% endif %}
+  {% if a.holo_spread_pct is not none %}
+    · Abstand zur normalen Karte <strong class="{% if a.holo_spread_pct > 0 %}up{% else %}down{% endif %}">{{ a.holo_spread_pct | pct }}</strong>
+  {% endif %}
+</p>
+{% endif %}
+
 <h3>Angebotslage</h3>
 {% if a.market %}
   <p>

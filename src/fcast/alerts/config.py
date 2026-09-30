@@ -29,6 +29,7 @@ class AlertConfig:
     system: bool = True  # source paused, collection failed
     totw: bool = True  # TOTW candidates before the weekly release
     promo: bool = True  # PROMO_PREBUY: cards linked to an upcoming promo
+    holo: bool = True  # HOLO_SPREAD: list the normal card just below the holo price
 
     @classmethod
     def defaults(cls, settings: Settings) -> "AlertConfig":

@@ -11,6 +11,7 @@ from fcast.analysis.stats import Point, PriceStats, hour_profile, price_stats, w
 from fcast.config import Settings
 from fcast.db import repositories as repo
 from fcast.db.models import MarketState, Player, WatchlistEntry
+from fcast.holo import holo_partner
 
 PROFILE_WINDOW = timedelta(days=30)
 
@@ -24,6 +25,8 @@ class CardAnalysis:
     supply: sig.Supply | None
     overprice: sig.OverpriceScore | None
     effective_price: int | None = None  # market price after outlier dampening
+    holo_player: Player | None = None
+    holo: sig.HoloQuote | None = None
     signals: list[sig.Signal] = field(default_factory=list)
     hours: dict[int, float] = field(default_factory=dict)
     weekdays: dict[int, float] = field(default_factory=dict)
@@ -39,6 +42,10 @@ class CardAnalysis:
             return None
         cheapest = self.market.listings[0]
         return cheapest if self.effective_price != cheapest else None
+
+    @property
+    def holo_spread_pct(self) -> float | None:
+        return sig.holo_spread_pct(self.stats.current, self.holo)
 
     @property
     def supply_gap_pct(self) -> float | None:
@@ -67,6 +74,16 @@ def _supply(
     )
 
 
+def _holo_quote(session: Session, holo: Player, settings: Settings) -> sig.HoloQuote | None:
+    market = repo.get_market_state(session, holo, settings.platform)
+    last = repo.latest_snapshot(session, holo, settings.platform)
+    extinct = market is not None and market.extinct
+    if last is None:
+        return sig.HoloQuote(price=None, extinct=extinct)
+    stale = extinct and market is not None and market.observed_at > last.captured_at
+    return sig.HoloQuote(price=last.price, extinct=extinct, stale=stale)
+
+
 def analyze_player(
     session: Session, player: Player, settings: Settings, now: datetime
 ) -> CardAnalysis:
@@ -80,10 +97,13 @@ def analyze_player(
     cfg = sig.SignalConfig.from_settings(settings)
     name = player.display_name
 
+    holo_player = holo_partner(session, player)
+    holo = _holo_quote(session, holo_player, settings) if holo_player is not None else None
     found = [
         sig.buy_dip(player.ea_id, name, stats, cfg),
         sig.sell_target(player.ea_id, name, stats, entry.target_sell if entry else None),
         sig.overprice_chance(player.ea_id, name, stats, supply, cfg),
+        sig.holo_spread(player.ea_id, name, stats, holo, supply, cfg),
     ]
     return CardAnalysis(
         player=player,
@@ -92,6 +112,8 @@ def analyze_player(
         market=market,
         supply=supply,
         overprice=sig.overprice_score(stats, supply, cfg),
+        holo_player=holo_player,
+        holo=holo,
         effective_price=(
             effective_price(market.listings, settings.outlier_gap_pct) if market else None
         ),
@@ -125,7 +147,8 @@ def current_signals(
     order = {
         sig.Rule.BUY_DIP: 0,
         sig.Rule.PROMO_PREBUY: 1,
-        sig.Rule.OVERPRICE_CHANCE: 2,
-        sig.Rule.SELL_TARGET: 3,
+        sig.Rule.HOLO_SPREAD: 2,
+        sig.Rule.OVERPRICE_CHANCE: 3,
+        sig.Rule.SELL_TARGET: 4,
     }
     return sorted(found, key=lambda s: (order[s.rule], -(s.score or 0), s.name))

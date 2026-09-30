@@ -114,6 +114,14 @@ class Settings(BaseSettings):
     promo_weight_nation: float = Field(default=0.3, ge=0, le=1)
     promo_prebuy_threshold: float = Field(default=45.0, ge=0, le=100)
 
+    # --- Holo pairs ---
+    # Signal HOLO_SPREAD when the holo trades at least this much above the normal card.
+    holo_min_spread_pct: float = Field(default=30.0, ge=0)
+    # Holo partners of watched cards are priced every `holo_interval_h` hours.
+    holo_interval_h: float = Field(default=2.0, ge=0.5)
+    # Holo versions looked up on FUTBIN per collector run.
+    holo_pairs_per_run: int = Field(default=3, ge=0, le=20)
+
     # Web dashboard (Basic Auth). The dashboard refuses to start without a password.
     web_user: str = "fcast"
     web_password: SecretStr | None = None

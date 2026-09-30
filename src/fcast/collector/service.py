@@ -17,6 +17,7 @@ from fcast.db import migrate
 from fcast.db import repositories as repo
 from fcast.db.base import utcnow
 from fcast.db.session import create_db_engine, create_session_factory, session_scope
+from fcast.holo import discover_pairs, due_holo_cards
 from fcast.promos.service import due_pool_cards, fill_pool, sync_feeds
 from fcast.sources.base import PriceSource, SourceBlockedError
 from fcast.sources.futbin import FutbinSource
@@ -151,6 +152,7 @@ class Collector:
                 logger.warning("no price sources configured (FCAST_SOURCES / FCAST_MANUAL_CSV)")
             with session_scope(self.session_factory) as session:
                 pool = due_pool_cards(session, utcnow(), self.settings)
+                pool += due_holo_cards(session, utcnow(), self.settings)
             self.last_result = await collect_once(
                 self.session_factory,
                 self.sources,
@@ -162,8 +164,19 @@ class Collector:
                 extra_ea_ids=pool,
             )
             self._runs += 1
+            await self._pair_holos()
             await self._send_alerts(self.last_result)
             return self.last_result
+
+    async def _pair_holos(self) -> None:
+        """Find holo versions of watched cards (FUTBIN pages are mostly cached by now)."""
+        source = self._futbin()
+        if source is None:
+            return
+        try:
+            await discover_pairs(source, self.session_factory, self.settings, utcnow())
+        except Exception:
+            logger.exception("holo pair discovery failed")
 
     async def _send_alerts(self, result: CollectResult) -> None:
         # Alerts must never break the collector.

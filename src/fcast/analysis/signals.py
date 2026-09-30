@@ -27,6 +27,7 @@ class Rule(StrEnum):
     SELL_TARGET = "SELL_TARGET"
     OVERPRICE_CHANCE = "OVERPRICE_CHANCE"
     PROMO_PREBUY = "PROMO_PREBUY"
+    HOLO_SPREAD = "HOLO_SPREAD"
 
 
 RULE_LABELS = {
@@ -34,6 +35,7 @@ RULE_LABELS = {
     Rule.SELL_TARGET: "Verkaufsziel",
     Rule.OVERPRICE_CHANCE: "ÜV-Chance",
     Rule.PROMO_PREBUY: "Promo-Vorkauf",
+    Rule.HOLO_SPREAD: "Holo-ÜV",
 }
 
 
@@ -67,6 +69,7 @@ class SignalConfig:
     uev_weight_liquidity: float = 0.20
     uev_min_markup_pct: float = 5.0
     uev_extinct_markup_pct: float = 20.0
+    holo_min_spread_pct: float = 30.0
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "SignalConfig":
@@ -254,4 +257,59 @@ def overprice_chance(
         expected_profit=expected,
         score=result.score,
         reasons=result.reasons,
+    )
+
+
+@dataclass(frozen=True)
+class HoloQuote:
+    """Price picture of the holo partner of a card."""
+
+    price: int | None  # current lowest BIN, or the last known price if extinct
+    extinct: bool
+    stale: bool = False  # price is only the last known one
+
+
+def holo_spread_pct(normal_price: int | None, holo: HoloQuote | None) -> float | None:
+    if not normal_price or holo is None or not holo.price:
+        return None
+    return (holo.price - normal_price) / normal_price * 100
+
+
+def holo_spread(
+    ea_id: int,
+    name: str,
+    stats: PriceStats,
+    holo: HoloQuote | None,
+    supply: Supply | None,
+    cfg: SignalConfig,
+) -> Signal | None:
+    """The holo trades far above the normal card: list the normal one just below the holo."""
+    spread = holo_spread_pct(stats.current, holo)
+    if spread is None or holo is None or holo.price is None or stats.current is None:
+        return None
+    if spread < cfg.holo_min_spread_pct:
+        return None
+    target = step_price(round_to_price_step(holo.price, "down"), -1)
+    if supply is not None and supply.range_max:
+        target = min(target, round_to_price_step(supply.range_max, "down"))
+    expected = profit(stats.current, target)
+    if expected <= 0:
+        return None
+    reasons = [
+        f"Holo {_coins(holo.price)} vs. normal {_coins(stats.current)} ({_pct(spread)})",
+    ]
+    if holo.extinct:
+        reasons.append("Holo gerade extinct" + (" (letzter bekannter Preis)" if holo.stale else ""))
+    if supply is not None and not supply.extinct and len(supply.listings) < FULL_LISTINGS:
+        reasons.append(f"normale Karte knapp ({len(supply.listings)} Angebote)")
+    return Signal(
+        rule=Rule.HOLO_SPREAD,
+        ea_id=ea_id,
+        name=name,
+        price=stats.current,
+        reference=holo.price,
+        recommended=target,
+        expected_profit=expected,
+        score=round(min(spread, 100.0), 1),
+        reasons=tuple(reasons),
     )

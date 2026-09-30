@@ -551,6 +551,7 @@ def alerts_save(
     system: OptionalFormStr = None,
     totw: OptionalFormStr = None,
     promo: OptionalFormStr = None,
+    holo: OptionalFormStr = None,
 ) -> HTMLResponse:
     errors: list[str] = []
     try:
@@ -582,6 +583,7 @@ def alerts_save(
         system=system is not None,
         totw=totw is not None,
         promo=promo is not None,
+        holo=holo is not None,
     )
     with _db(request) as session:
         save_alert_config(session, config)
