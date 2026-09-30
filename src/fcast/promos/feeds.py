@@ -13,9 +13,11 @@ from fcast.sources.base import SourceError
 # Only FC / Ultimate Team articles that hint at upcoming content are kept.
 _CONTEXT = ("fc 27", "fc27", "ultimate team", " fut ", "fut ", "totw", "team of the week")
 _TOPIC = (
-    "leak", "promo", "event", "team of the week", "totw", "coming", "release", "revealed",
-    "squad", "players", "sbc", "campaign", "loading screen", "teaser",
+    "leak", "promo", "event", "team of the week", "totw", "coming", "release date",
+    "revealed", "campaign", "loading screen", "teaser", "confirmed",
 )  # fmt: skip
+# Guides and tips are not about upcoming content.
+_NOISE = ("guide", "how to", "best ", "tips", "explained", "tier list", "faq")
 
 
 @dataclass(frozen=True)
@@ -74,9 +76,17 @@ def parse_rss(xml: str, source: str) -> list[FeedItem]:
     return items
 
 
+def is_relevant_text(title: str, summary: str = "") -> bool:
+    """FC / Ultimate Team article about upcoming content (not a guide)."""
+    head = f" {title} ".lower()
+    text = f" {title} {summary} ".lower()
+    if any(noise in head for noise in _NOISE):
+        return False
+    return any(c in text for c in _CONTEXT) and any(t in head for t in _TOPIC)
+
+
 def is_relevant(item: FeedItem) -> bool:
-    text = f" {item.title} {item.summary} ".lower()
-    return any(c in text for c in _CONTEXT) and any(t in text for t in _TOPIC)
+    return is_relevant_text(item.title, item.summary)
 
 
 def parse_feed_setting(value: str) -> list[tuple[str, str]]:

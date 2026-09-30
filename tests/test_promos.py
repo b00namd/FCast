@@ -61,6 +61,23 @@ def test_parse_realsport_feed() -> None:
     assert not any("MLB" in i.title for i in relevant)
 
 
+@pytest.mark.parametrize(
+    ("title", "relevant"),
+    [
+        ("FC 27 Team of the Week 3 Leaked: Ødegaard & Chawinga", True),
+        ("FC 27 Future Stars Event", True),
+        ("FC 27 Pivot Shift Evolution Guide: Best Players", False),
+        ("How to Level Up Fast in FC 27 Season 1", False),
+        ("FC 27 Red Bull Wings Cup Promo: How to Get Free SP", False),
+        ("MLB 9 Innings Rivals 26 Launches Postseason Promotion", False),
+    ],
+)
+def test_relevance_filter(title: str, relevant: bool) -> None:
+    from fcast.promos.feeds import is_relevant_text
+
+    assert is_relevant_text(title) is relevant
+
+
 def test_parse_fifauteam_feed() -> None:
     relevant = [i for i in parse_rss(FIFAUTEAM, "fifauteam") if is_relevant(i)]
     assert [i.title for i in relevant] == ["FC 27 Future Stars Event"]
@@ -254,7 +271,7 @@ async def test_sync_feeds_stores_new_relevant_items_once(factory: sessionmaker[S
     first = await service.sync_feeds(client, factory, config)
     second = await service.sync_feeds(client, factory, config)
     await client.aclose()
-    assert first >= 5
+    assert first == 3  # the three leaks; guides and other sports are filtered out
     assert second == 0
     with factory() as session:
         inbox = service.inbox(session)

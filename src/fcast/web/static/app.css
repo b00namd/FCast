@@ -247,6 +247,12 @@ button, [type="submit"], [type="button"], [role="button"] {
   padding: 0.45rem 0.95rem;
   border-radius: 0.5rem;
 }
+table .actions form { display: inline; margin: 0; }
+table .actions button, table .actions [role="button"], table .actions [type="submit"] {
+  width: auto;
+}
+.form-actions form { margin: 0; display: inline-flex; }
+.form-actions form button, .form-actions > [role="button"] { margin: 0; }
 table .actions button, table .actions [role="button"] {
   padding: 0.25rem 0.6rem;
   font-size: 0.78rem;

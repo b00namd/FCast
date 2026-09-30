@@ -15,7 +15,7 @@ from fcast.db import repositories as repo
 from fcast.db.models import LeakItem, LinkType, Player, PoolCard, Promo
 from fcast.db.session import session_scope
 from fcast.promos.entities import Detection, detect
-from fcast.promos.feeds import is_relevant, parse_feed_setting, parse_rss
+from fcast.promos.feeds import is_relevant, is_relevant_text, parse_feed_setting, parse_rss
 from fcast.promos.scoring import (
     CardInfo,
     PromoInfo,
@@ -74,14 +74,14 @@ async def sync_feeds(
 
 
 def inbox(session: Session, limit: int = 30) -> list[LeakItem]:
-    return list(
-        session.scalars(
-            select(LeakItem)
-            .where(LeakItem.status == "new")
-            .order_by(LeakItem.published_at.desc().nulls_last(), LeakItem.id.desc())
-            .limit(limit)
-        )
+    """New items, newest first; the relevance filter is re-applied so it can be improved."""
+    items = session.scalars(
+        select(LeakItem)
+        .where(LeakItem.status == "new")
+        .order_by(LeakItem.published_at.desc().nulls_last(), LeakItem.id.desc())
+        .limit(limit * 3)
     )
+    return [item for item in items if is_relevant_text(item.title, item.summary)][:limit]
 
 
 # --- promos ----------------------------------------------------------------------
