@@ -1,3 +1,12 @@
+{#- Chem style chips: top 3 community chem styles, or the single fallback chem style. -#}
 {% macro chem_list(player) -%}
-{%- for name, share in player.chem_styles %}{% if not loop.first %} · {% endif %}{{ name }} {{ share }} %{% endfor -%}
+{%- if player.chem_styles -%}
+<span class="chems">
+{%- for name, share in player.chem_styles -%}
+<span class="chem chem-{{ name | chem_group }}" title="{{ name }} ({{ name | chem_group_label }}): {{ share }} % der FUTBIN-Community">{{ name }} <b>{{ share }}%</b></span>
+{%- endfor -%}
+</span>
+{%- elif player.chem_style -%}
+<span class="chems"><span class="chem chem-{{ player.chem_style | chem_group }}" title="{{ player.chem_style }} ({{ player.chem_style | chem_group_label }}), laut FUTBIN-Profil">{{ player.chem_style }}</span></span>
+{%- endif -%}
 {%- endmacro %}

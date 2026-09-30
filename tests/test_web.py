@@ -676,8 +676,10 @@ def test_watchlist_add_with_only_futbin_link_for_special_card(
         assert player.card_type == "Team of the Week"
         assert repo.get_source_ref(session, 50579475, "futbin") == "/27/player/22947/michael-olise"
     page = client.get("/players/50579475").text
-    assert "Hunter 77 % · Artist 8 % · Engine 8 %" in page
-    assert "Hunter 77 %" in client.get("/watchlist").text
+    assert "Hunter <b>77%</b>" in page
+    assert "Artist <b>8%</b>" in page
+    assert "Engine <b>8%</b>" in page
+    assert "Hunter <b>77%</b>" in client.get("/watchlist").text
     assert "535" in page
 
 
@@ -755,3 +757,28 @@ def test_futbin_link_is_found_in_background(client: TestClient, collector: Colle
         player = repo.get_player_by_ea_id(session, 50579475)
         assert player is not None
         assert player.chem_style == "Hunter"
+
+
+def test_overview_shows_chem_chips(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 1)
+    add_watch(collector, 2)
+    with collector.session_factory.begin() as session:
+        repo.upsert_player(
+            session, 1, repo.PlayerDetails(chem_styles_raw="Engine:48|Hunter:24|Deadeye:10")
+        )
+        repo.upsert_player(session, 2, repo.PlayerDetails(chem_style="GK Basic"))
+    page = client.get("/prices").text
+    assert 'class="chem chem-midfield"' in page  # Engine
+    assert 'class="chem chem-pace"' in page  # Hunter
+    assert 'class="chem chem-attack"' in page  # Deadeye
+    assert "Engine <b>48%</b>" in page
+    assert 'class="chem chem-keeper"' in page  # fallback without percentages
+    assert "GK Basic" in page
+
+
+def test_chem_groups() -> None:
+    from fcast.web.chem import chem_group
+
+    assert chem_group("Hunter") == "pace"
+    assert chem_group("GK Basic") == "keeper"
+    assert chem_group("Unbekannt") == "other"

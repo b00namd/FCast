@@ -16,6 +16,7 @@ from fcast import __version__
 from fcast.collector.service import Collector, create_scheduler
 from fcast.config import Settings, get_settings
 from fcast.web import routes
+from fcast.web.chem import GROUP_LABELS, chem_group
 from fcast.web.security import SameOriginMiddleware, require_auth
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,8 @@ def build_templates(settings: Settings) -> Jinja2Templates:
     templates.env.filters["coins"] = format_coins
     templates.env.filters["pct"] = format_pct
     templates.env.filters["dt"] = format_dt
+    templates.env.filters["chem_group"] = chem_group
+    templates.env.filters["chem_group_label"] = lambda name: GROUP_LABELS[chem_group(name)]
     templates.env.globals["version"] = __version__
     templates.env.globals["platform_label"] = settings.platform.value.upper()
     return templates

@@ -23,7 +23,7 @@
     {% set change = row.change_pct %}
     <tr>
       <td><a href="/players/{{ row.player.ea_id }}">{{ row.player.display_name }}</a>
-        {% if row.player.chem_styles %}<br><small class="muted">{{ chem_list(row.player) }}</small>{% endif %}
+        {% if row.player.chem_styles or row.player.chem_style %}<br>{{ chem_list(row.player) }}{% endif %}
         {% set a = analyses.get(row.player.ea_id) %}
         {% if a and a.extinct %}<span class="badge bad" title="Keine Angebote auf dem Markt">extinct</span>{% endif %}
         {% if row.buy_hit %}<span class="badge warn" title="Preis ≤ Kaufziel">Kaufziel</span>{% endif %}

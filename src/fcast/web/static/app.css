@@ -57,3 +57,25 @@ a.badge { text-decoration: none; margin-left: 0.2rem; }
   .stats .value { font-size: 1.05rem; }
   .chart-box { height: 240px; }
 }
+
+/* Chem style chips (own design; colors by group) */
+.chems { display: inline-flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.2rem; vertical-align: middle; }
+.chem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.45rem 0.05rem 0.35rem;
+  border-radius: 0.3rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  border-left: 3px solid var(--chem-color);
+  background: color-mix(in srgb, var(--chem-color) 18%, transparent);
+}
+.chem b { font-weight: 600; color: var(--pico-muted-color); }
+.chem-attack { --chem-color: #e74c3c; }
+.chem-pace { --chem-color: #f39c12; }
+.chem-midfield { --chem-color: #2ecc71; }
+.chem-defense { --chem-color: #3498db; }
+.chem-keeper { --chem-color: #9b59b6; }
+.chem-basic, .chem-other { --chem-color: #95a5a6; }
