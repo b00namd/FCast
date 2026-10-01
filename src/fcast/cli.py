@@ -758,6 +758,8 @@ def lage(
                 for t in ov.totw
             ],
         ),
+        ("Radar", ov.radar),
+        ("Futter-Index", ov.fodder),
         ("Alerts 24 h", ov.alerts),
         ("Quellen", ov.sources),
         ("Backtest", [ov.backtest] if ov.backtest else []),

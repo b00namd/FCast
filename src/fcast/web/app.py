@@ -59,6 +59,9 @@ def build_templates(settings: Settings) -> Jinja2Templates:
     templates.env.filters["pct"] = format_pct
     templates.env.filters["dt"] = format_dt
     templates.env.filters["interval"] = format_interval
+    templates.env.filters["isodt"] = lambda value, fmt="%d.%m. %H:%M": format_dt(
+        datetime.fromisoformat(value) if value else None, fmt
+    )
     templates.env.filters["chem_group"] = chem_group
     templates.env.filters["chem_group_label"] = lambda name: GROUP_LABELS[chem_group(name)]
     templates.env.globals["version"] = __version__

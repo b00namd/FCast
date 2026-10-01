@@ -25,11 +25,15 @@ from fcast.analysis.service import current_signals
 from fcast.config import Settings
 from fcast.db import repositories as repo
 from fcast.db.session import session_scope
+from fcast.radar import service as radar
+from fcast.radar import signals as rs
 from fcast.sources import futbin
 
 logger = logging.getLogger(__name__)
 
 SOURCE_PAUSED = "SOURCE_PAUSED"
+RADAR = "RADAR"  # alerts_log rule of radar hits ("RADAR:FODDER86" for fodder)
+RADAR_COOLDOWN_H = 24.0  # early signals last for a while; one push a day is enough
 COLLECT_FAILED = "COLLECT_FAILED"
 
 
@@ -118,6 +122,44 @@ def signal_notification(
     )
 
 
+def radar_notification(hit: radar.RadarHit, dashboard_url: str | None) -> Notification:
+    lines = [f"{s.label} ({s.score:.0f}): {' · '.join(s.reasons)}" for s in hit.signals]
+    lines.append(f"Preis {_coins(hit.price)} · Potenzial {hit.potential:.0f}/100")
+    if not hit.on_watchlist:
+        lines.append("Noch nicht auf der Watchlist")
+    actions: list[tuple[str, str]] = []
+    click = None
+    if dashboard_url:
+        click = f"{dashboard_url.rstrip('/')}/radar"
+        actions.append(("Radar", click))
+    if hit.futbin_ref:
+        actions.append(("FUTBIN", futbin.BASE_URL + hit.futbin_ref))
+    return Notification(
+        title=f"Radar: {hit.player.display_name}",
+        message="\n".join(lines),
+        priority=Priority.DEFAULT,
+        tags=("telescope",),
+        click_url=click,
+        actions=tuple(actions),
+    )
+
+
+def fodder_notification(
+    line: rs.FodderLine, signal: rs.RadarSignal, dashboard_url: str | None
+) -> Notification:
+    click = f"{dashboard_url.rstrip('/')}/radar" if dashboard_url else None
+    return Notification(
+        title=f"Futter zieht an: {line.rating}er",
+        message="\n".join(
+            [*signal.reasons, "Große SBC in Sicht? Futter jetzt kaufen, später teurer."]
+        ),
+        priority=Priority.DEFAULT,
+        tags=("chart_with_upwards_trend",),
+        click_url=click,
+        actions=(("Radar", click),) if click else (),
+    )
+
+
 class AlertEngine:
     def __init__(self, notifier: Notifier, settings: Settings) -> None:
         self.notifier = notifier
@@ -188,6 +230,29 @@ class AlertEngine:
             )
         return found
 
+    def radar_candidates(self, session: Session, now: datetime) -> list[Candidate]:
+        """Strong radar hits and fodder rises (score at least FCAST_RADAR_ALERT_SCORE)."""
+        threshold = self.settings.radar_alert_score
+        found = [
+            Candidate(
+                rule=RADAR,
+                ea_id=hit.player.ea_id,
+                notification=radar_notification(hit, self.settings.dashboard_url),
+            )
+            for hit in radar.hits(session, self.settings, now)
+            if hit.potential >= threshold
+        ]
+        found += [
+            Candidate(
+                rule=f"{RADAR}:FODDER{line.rating}",
+                ea_id=None,
+                notification=fodder_notification(line, line.signal, self.settings.dashboard_url),
+            )
+            for line in radar.fodder(session, self.settings, now)
+            if line.signal is not None and line.signal.score >= threshold
+        ]
+        return found
+
     def decide(
         self, session: Session, candidate: Candidate, config: AlertConfig, now: datetime
     ) -> Outcome:
@@ -205,7 +270,10 @@ class AlertEngine:
             return Outcome.QUIET
         player = repo.get_player_by_ea_id(session, candidate.ea_id) if candidate.ea_id else None
         last = repo.last_alert(session, candidate.rule, player)
-        if last is not None and now - last.sent_at < timedelta(hours=config.cooldown_h):
+        cooldown = config.cooldown_h
+        if candidate.rule.startswith(RADAR):
+            cooldown = max(cooldown, RADAR_COOLDOWN_H)
+        if last is not None and now - last.sent_at < timedelta(hours=cooldown):
             return Outcome.COOLDOWN
         return Outcome.SENT
 
@@ -213,6 +281,8 @@ class AlertEngine:
     def _rule_enabled(candidate: Candidate, config: AlertConfig) -> bool:
         if candidate.kind == "system":
             return config.system
+        if candidate.rule.startswith(RADAR):
+            return config.radar
         return {
             sig.Rule.BUY_DIP.value: config.buy_dip,
             sig.Rule.SELL_TARGET.value: config.sell_target,
@@ -232,6 +302,7 @@ class AlertEngine:
         config = load_alert_config(session, self.settings)
         candidates = self.system_candidates(paused or {}, failed_players)
         candidates += self.signal_candidates(session, now)
+        candidates += self.radar_candidates(session, now)
         report = AlertReport()
         for candidate in candidates:
             report.decisions.append((candidate, self.decide(session, candidate, config, now)))

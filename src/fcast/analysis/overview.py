@@ -22,6 +22,7 @@ MIN_DAYS_HOUR_PROFILE = 3  # a time-of-day pattern needs a few days of data
 MIN_DAYS_WEEKDAY_PROFILE = 14
 ALERT_WINDOW = timedelta(hours=24)
 PROMO_WINDOW = timedelta(days=14)
+RADAR_TOP = 15
 WEEKDAYS = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 
 
@@ -94,6 +95,8 @@ class Overview:
     alerts: list[str] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
     backtest: str | None = None
+    radar: list[str] = field(default_factory=list)  # top radar hits
+    fodder: list[str] = field(default_factory=list)  # fodder index per rating
 
 
 def _days(points: list[datetime]) -> int:
@@ -210,6 +213,22 @@ def build_overview(session: Session, settings: Settings, now: datetime) -> Overv
         if status.last_success_at is not None:
             line += f", letzter Erfolg {status.last_success_at:%d.%m. %H:%M} UTC"
         overview.sources.append(line)
+
+    from fcast.radar import service as radar
+
+    for hit in radar.hits(session, settings, now)[:RADAR_TOP]:
+        where = "Watchlist" if hit.on_watchlist else (hit.list_name or "-")
+        overview.radar.append(
+            f"{hit.player.display_name} [{where}] Potenzial {hit.potential:.0f}, "
+            f"Preis {hit.price or '-'}: "
+            + " | ".join(f"{s.label} {s.score:.0f}: {', '.join(s.reasons)}" for s in hit.signals)
+        )
+    overview.fodder = [
+        f"{line.rating}er {line.price}"
+        + (f" ({line.change_pct:+.1f} % in 24 h)" if line.change_pct is not None else "")
+        + (f" - {line.signal.label}" if line.signal else "")
+        for line in radar.fodder(session, settings, now)
+    ]
 
     start = now - timedelta(days=30)
     report = bt.run_backtest(session, settings, sig.Rule.BUY_DIP, start, now)

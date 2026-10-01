@@ -30,6 +30,7 @@ class AlertConfig:
     totw: bool = True  # TOTW candidates before the weekly release
     promo: bool = True  # PROMO_PREBUY: cards linked to an upcoming promo
     holo: bool = True  # HOLO_SPREAD: list the normal card just below the holo price
+    radar: bool = True  # potential radar: strong early signals and fodder rises
 
     @classmethod
     def defaults(cls, settings: Settings) -> "AlertConfig":

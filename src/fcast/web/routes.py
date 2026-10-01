@@ -29,6 +29,7 @@ from fcast.db.base import utcnow
 from fcast.db.models import LeakItem, LinkType, Player, Promo, TotwActual, TotwPrediction
 from fcast.db.session import session_scope
 from fcast.promos import service as promo_service
+from fcast.radar import service as radar_service
 from fcast.sources import futbin
 from fcast.sources.base import PlayerInfo, PlayerNotFoundError, SourceError
 from fcast.sources.futbin_locator import name_hints_from_futgg, slugify
@@ -582,6 +583,7 @@ def alerts_save(
     totw: OptionalFormStr = None,
     promo: OptionalFormStr = None,
     holo: OptionalFormStr = None,
+    radar: OptionalFormStr = None,
 ) -> HTMLResponse:
     errors: list[str] = []
     try:
@@ -614,6 +616,7 @@ def alerts_save(
         totw=totw is not None,
         promo=promo is not None,
         holo=holo is not None,
+        radar=radar is not None,
     )
     with _db(request) as session:
         save_alert_config(session, config)
@@ -687,6 +690,30 @@ async def totw_refresh(request: Request) -> Response:
         tasks.add(task)
         task.add_done_callback(tasks.discard)
     return RedirectResponse("/totw?started=1", status_code=303)
+
+
+# --- potential radar ---------------------------------------------------------------------
+
+RADAR_LISTS = {"popular": "Popular", "latest": "Neu", "totw": "TOTW"}
+
+
+@pages.get("/radar", response_class=HTMLResponse)
+def radar_page(request: Request) -> HTMLResponse:
+    settings = _settings(request)
+    now = utcnow()
+    with _db(request) as session:
+        return _render(
+            request,
+            "radar.html",
+            {
+                "nav": "radar",
+                "hits": radar_service.hits(session, settings, now),
+                "fodder": radar_service.fodder(session, settings, now),
+                "status": radar_service.status(session, settings, now),
+                "lists": RADAR_LISTS,
+                "settings": settings,
+            },
+        )
 
 
 # --- backtest ---------------------------------------------------------------------------

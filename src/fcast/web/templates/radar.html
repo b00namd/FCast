@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Radar{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>Potenzial-Radar</h2>
+  <p class="muted">Frühsignale über die Watchlist hinaus – Karten, die gerade anziehen, knapp werden oder plötzlich viel gespielt werden.</p>
+</hgroup>
+
+<p class="muted"><small>
+  Scanner: {{ status.universe }} Karten aus FUTBIN Popular, New Players und TOTW · {{ status.resolved }} erkannt ·
+  {{ status.checked_recently }} in den letzten {{ settings.radar_interval_h | int }} h bepreist
+  {% if status.universe_at %}· Listen zuletzt {{ status.universe_at | isodt }}{% endif %}
+  {% if settings.radar_per_run == 0 %}· <span class="down">Scanner ausgeschaltet (FCAST_RADAR_PER_RUN=0)</span>{% endif %}
+</small></p>
+
+<h3>Futter-Index</h3>
+{% if not fodder %}
+  <p class="muted">Noch keine Futterpreise – FCast liest sie alle {{ settings.radar_fodder_h | int }} h bei FUTBIN aus.</p>
+{% else %}
+<div class="overflow-auto">
+<table>
+  <thead><tr><th>Rating</th><th class="num">Ø 3 günstigste</th><th class="num">24 h</th><th></th></tr></thead>
+  <tbody>
+  {% for line in fodder %}
+    <tr>
+      <td>{{ line.rating }}</td>
+      <td class="num">{{ line.price | coins }}</td>
+      <td class="num">{% if line.change_pct is not none %}<span class="{% if line.change_pct > 0 %}up{% elif line.change_pct < 0 %}down{% endif %}">{{ line.change_pct | pct }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td>{% if line.signal %}<span class="badge good">{{ line.signal.label }}</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h3>Treffer</h3>
+{% if not hits %}
+  <p class="muted">Gerade keine Frühsignale. Trend-Start braucht mindestens 4 Preise in 12 h, „Angebot schrumpft“ drei Beobachtungen in 24 h,
+  „Nutzung steigt“ zwei Tage Spielzahlen – Radar-Karten werden etwa alle {{ settings.radar_interval_h | int }} h bepreist, die Watchlist öfter.</p>
+{% else %}
+<div class="overflow-auto">
+<table>
+  <thead><tr><th>Karte</th><th class="hide-sm">Herkunft</th><th class="num">Preis</th><th>Signale</th><th class="num">Potenzial</th><th></th></tr></thead>
+  <tbody>
+  {% for hit in hits %}
+    <tr>
+      <td><a href="/players/{{ hit.player.ea_id }}">{{ hit.player.display_name }}</a>
+        {% if hit.player.card_type %}<br><small class="muted">{{ hit.player.card_type }}</small>{% endif %}</td>
+      <td class="hide-sm">{% if hit.on_watchlist %}Watchlist{% else %}{{ lists.get(hit.list_name, hit.list_name or "–") }}{% endif %}</td>
+      <td class="num">{{ hit.price | coins }}</td>
+      <td>
+        {% for s in hit.signals %}
+          <span class="badge {% if s.score >= 70 %}good{% else %}warn{% endif %}">{{ s.label }} {{ s.score | round | int }}</span>
+          <small class="muted">{{ s.reasons | join(" · ") }}</small>{% if not loop.last %}<br>{% endif %}
+        {% endfor %}
+      </td>
+      <td class="num"><strong>{{ hit.potential | round | int }}</strong></td>
+      <td class="actions">
+        {% if not hit.on_watchlist %}
+        <form method="post" action="/watchlist" style="margin:0">
+          <input type="hidden" name="ea_id" value="{{ hit.player.ea_id }}">
+          {% if hit.futbin_ref %}<input type="hidden" name="futbin_url" value="https://www.futbin.com{{ hit.futbin_ref }}">{% endif %}
+          <input type="hidden" name="note" value="Radar: {{ hit.signals[0].label }}">
+          <button type="submit" class="secondary outline">Beobachten</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<details>
+  <summary>Was die Signale bedeuten</summary>
+  <ul>
+    <li><strong>Trend-Start:</strong> Der Preis steigt seit mehreren Abfragen stetig (mind. {{ settings.radar_trend_min_pct | int }} % in 12 h, höchstens 30 % – danach ist der Sprung schon passiert).</li>
+    <li><strong>Angebot schrumpft:</strong> Die Zahl der günstigen Angebote sinkt deutlich, während der Preis hält – Vorstufe zu ÜV oder extinct.</li>
+    <li><strong>Nutzung steigt:</strong> Die Karte wird viel öfter gespielt als am Vortag und mehr als die typische Karte – Nachfrage kommt oft vor dem Preis.</li>
+    <li><strong>Futter zieht an:</strong> Die günstigsten Karten eines Ratings werden deutlich teurer – oft kündigt sich eine große SBC an.</li>
+    <li>Potenzial = stärkstes Signal + 5 Punkte je weiterem Signal. Ab {{ settings.radar_alert_score | int }} kommt ein Push (höchstens einmal am Tag pro Karte).</li>
+  </ul>
+</details>
+{% endblock %}

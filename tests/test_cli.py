@@ -338,6 +338,8 @@ def test_lage_command(db_path: Path) -> None:
     assert "Doku (84)" in result.output
     assert "Kauf-Dip" in result.output  # 10 % under the 7-day mean
     assert "Backtest" in result.output
+    assert "Radar" in result.output
+    assert "Futter-Index" in result.output
 
     result = runner.invoke(app, ["lage", "--json"])
     assert result.exit_code == 0, result.output

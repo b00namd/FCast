@@ -1109,3 +1109,39 @@ def test_player_page_shows_how_long_supply_is_thin(
     page = client.get("/players/8").text
     assert "Weniger als 5 Angebote seit" in page
     assert "Angebot seit 20 h dünn" in page  # reason of the ÜV score
+
+
+def test_radar_page_lists_hits_and_fodder(client: TestClient, collector: Collector) -> None:
+    from fcast.db.models import FodderPrice, RadarCard
+
+    now = datetime.now(UTC)
+    empty = client.get("/radar")
+    assert empty.status_code == 200
+    assert "Gerade keine Frühsignale" in empty.text
+    with collector.session_factory.begin() as session:
+        player = repo.upsert_player(session, 77, repo.PlayerDetails(name="Radar Card", rating=84))
+        session.add(
+            RadarCard(
+                futbin_ref="/27/player/77/radar-card",
+                list_name="latest",
+                player_id=player.id,
+                first_seen_at=now,
+                last_seen_at=now,
+            )
+        )
+        repo.set_source_ref(session, player, "futbin", "/27/player/77/radar-card")
+        prices = [20_000, 20_000, 20_250, 20_500, 20_500, 20_750, 21_000, 21_250, 21_500]
+        for i, price in enumerate(prices):
+            at = now - timedelta(hours=8 - i)
+            repo.add_snapshot(session, player, Platform.PC, price, "futbin", at)
+        for hours, price in ((24, 3_500), (0, 4_200)):
+            at = now - timedelta(hours=hours)
+            session.add(FodderPrice(platform=Platform.PC, rating=86, price=price, observed_at=at))
+    page = client.get("/radar").text
+    assert "Radar Card (84)" in page
+    assert "Trend-Start" in page
+    assert "Neu" in page  # from FUTBIN "New Players"
+    assert 'name="futbin_url" value="https://www.futbin.com/27/player/77/radar-card"' in page
+    assert "Futter zieht an" in page
+    assert "+20,0 %" in page
+    assert 'name="radar"' in client.get("/alerts").text

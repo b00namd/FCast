@@ -322,3 +322,67 @@ async def test_collector_sends_alerts_after_run(tmp_path: Path) -> None:
     finally:
         await collector.aclose()
     assert [n.title for n in notifier.sent] == ["Kauf-Dip: Card 1"]
+
+
+# --- radar --------------------------------------------------------------------------------
+
+
+def seed_radar(factory: sessionmaker[Session], now: datetime = NOON) -> None:
+    """A radar card (not watched) rising steadily over the last 12 hours, plus fodder +20 %."""
+    from fcast.db.models import FodderPrice, RadarCard
+
+    with factory.begin() as session:
+        player = repo.upsert_player(session, 77, repo.PlayerDetails(name="Radar Card"))
+        session.add(
+            RadarCard(
+                futbin_ref="/27/player/77/radar-card",
+                list_name="latest",
+                player_id=player.id,
+                first_seen_at=now,
+                last_seen_at=now,
+            )
+        )
+        prices = [20_000, 20_000, 20_250, 20_500, 20_500, 20_750, 21_000, 21_250, 21_500]
+        for i, price in enumerate(prices):
+            at = now - timedelta(hours=8 - i)
+            repo.add_snapshot(session, player, Platform.PC, price, "futbin", at)
+        for hours, price in ((24, 3_500), (0, 4_200)):
+            session.add(
+                FodderPrice(
+                    platform=Platform.PC,
+                    rating=86,
+                    price=price,
+                    observed_at=now - timedelta(hours=hours),
+                )
+            )
+
+
+async def test_radar_alerts_once_a_day(factory: sessionmaker[Session]) -> None:
+    seed_radar(factory)
+    notifier = FakeNotifier()
+    engine = AlertEngine(notifier, make_settings())
+
+    report = await engine.process(factory, NOON)
+    assert report.count(Outcome.SENT) == 2
+    titles = sorted(n.title for n in notifier.sent)
+    assert titles == ["Futter zieht an: 86er", "Radar: Radar Card"]
+    radar_push = next(n for n in notifier.sent if n.title.startswith("Radar"))
+    assert "Trend-Start" in radar_push.message
+    assert "Noch nicht auf der Watchlist" in radar_push.message
+    assert radar_push.click_url == "http://fcast/radar"
+    assert sorted(alerts_logged(factory)) == ["RADAR", "RADAR:FODDER86"]
+
+    # Radar hits wait 24 h, not the usual 6 h.
+    with factory.begin() as session:
+        for alert in repo.list_alerts(session):
+            alert.sent_at = NOON - timedelta(hours=7)
+    again = await engine.process(factory, NOON)
+    assert again.count(Outcome.COOLDOWN) == 2
+
+
+async def test_radar_alerts_can_be_switched_off(factory: sessionmaker[Session]) -> None:
+    seed_radar(factory)
+    with factory.begin() as session:
+        save_alert_config(session, AlertConfig(radar=False))
+    report = await AlertEngine(FakeNotifier(), make_settings()).process(factory, NOON)
+    assert report.count(Outcome.DISABLED) == 2
