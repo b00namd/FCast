@@ -3,10 +3,19 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import httpx
+from sqlalchemy import select
+
 from fcast.analysis.stats import Point
-from fcast.config import Platform
+from fcast.collector.service import Collector
+from fcast.config import Platform, Settings
+from fcast.db import repositories as repo
+from fcast.db.models import FodderPrice, RadarCard
+from fcast.radar import service as radar
 from fcast.radar import signals as rs
 from fcast.radar.futbin_lists import parse_fodder, parse_short_price, player_refs
+from fcast.sources.futbin import FutbinSource
+from fcast.sources.http import PoliteHttpClient
 
 FIXTURES = Path(__file__).parent / "fixtures" / "futbin"
 NOW = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
@@ -159,3 +168,124 @@ def test_potential_combines_signals() -> None:
     assert rs.potential([]) == 0
     assert rs.potential([a]) == 70
     assert rs.potential([a, b]) == 75
+
+
+# --- scanner in the collector -------------------------------------------------------------------
+
+LIST = (
+    '<a href="/27/player/21487/maradona">x</a><a href="/27/player/21516/muller">x</a>'
+    '<a href="/27/player/22947/michael-olise">x</a>'
+)
+PAGES = {
+    "/robots.txt": "User-agent: *\nDisallow: /*?*\n",
+    "/27/popular": LIST,
+    "/27/latest": '<a href="/27/player/21487/maradona">x</a>',
+    "/27/squad-building-challenges/cheapest": fixture("cheapest.html"),
+    "/27/player/21487/maradona": fixture("21487-maradona.html"),
+    "/27/player/21516/muller": fixture("21516-muller.html"),
+    "/27/player/22947/michael-olise": fixture("22947-olise-totw.html"),
+}
+
+
+def scanner(tmp_path: Path, requests: list[str], **overrides: object) -> Collector:
+    settings = Settings(
+        _env_file=None,
+        db_path=tmp_path / "fcast.db",
+        platform="pc",
+        sources="",
+        radar_resolve_per_run=2,
+        **overrides,  # type: ignore[arg-type]
+    )
+    collector = Collector(settings, sources=[])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request.url.path)
+        text = PAGES.get(request.url.path)
+        return httpx.Response(200, text=text) if text else httpx.Response(404)
+
+    async def no_sleep(_: float) -> None:
+        return None
+
+    client = PoliteHttpClient(
+        "FCast/test", transport=httpx.MockTransport(handler), sleep=no_sleep, cache_ttl=0
+    )
+
+    def lookup(ea_id: int) -> str | None:
+        return collector._lookup_ref(ea_id, "futbin")
+
+    collector.sources.append(FutbinSource(client, lookup, Platform.PC))
+    return collector
+
+
+async def test_scanner_reads_lists_resolves_and_prices_radar_cards(tmp_path: Path) -> None:
+    requests: list[str] = []
+    collector = scanner(tmp_path, requests)
+    try:
+        await collector.run_once()
+        with collector.session_factory() as session:
+            cards = {c.futbin_ref: c for c in session.scalars(select(RadarCard))}
+            assert set(cards) == {
+                "/27/player/21487/maradona",
+                "/27/player/21516/muller",
+                "/27/player/22947/michael-olise",
+            }
+            assert cards["/27/player/21487/maradona"].list_name == "popular"
+            resolved = [c for c in cards.values() if c.player_id is not None]
+            assert len(resolved) == 2  # at most two lookups per run
+            assert all(c.checked_at is not None for c in resolved)  # priced in the same run
+            olise = repo.get_player_by_ea_id(session, 50579475)
+            if olise is not None:  # not resolved yet in run 1 (order by first seen)
+                assert repo.latest_snapshot(session, olise, Platform.PC) is None
+            fodder = session.scalars(select(FodderPrice)).all()
+            assert {f.rating for f in fodder} == set(range(82, 91))
+            assert next(f.price for f in fodder if f.rating == 85) == 1_867  # Ø of 1.8/1.9/1.9K
+            for card in resolved:
+                assert card.player is not None
+                assert repo.latest_snapshot(session, card.player, Platform.PC) is not None
+                assert repo.list_usage(session, card.player)  # games counter recorded
+
+        lists_before = sum(1 for r in requests if r in ("/27/popular", "/27/latest"))
+        await collector.run_once()  # lists and fodder are not due again; the third card is
+        assert sum(1 for r in requests if r in ("/27/popular", "/27/latest")) == lists_before
+        assert requests.count("/27/squad-building-challenges/cheapest") == 1
+        with collector.session_factory() as session:
+            assert all(c.player_id for c in session.scalars(select(RadarCard)))
+    finally:
+        await collector.aclose()
+
+
+async def test_scanner_can_be_switched_off(tmp_path: Path) -> None:
+    requests: list[str] = []
+    collector = scanner(tmp_path, requests, radar_per_run=0)
+    try:
+        await collector.run_once()
+        assert "/27/popular" not in requests
+    finally:
+        await collector.aclose()
+
+
+def test_hits_show_radar_cards_with_early_signals(tmp_path: Path) -> None:
+    collector = scanner(tmp_path, [])
+    now = NOW
+    with collector.session_factory.begin() as session:
+        rising = repo.upsert_player(session, 1, repo.PlayerDetails(name="Steigt", rating=85))
+        flat = repo.upsert_player(session, 2, repo.PlayerDetails(name="Flach", rating=85))
+        for player in (rising, flat):
+            session.add(
+                RadarCard(
+                    futbin_ref=f"/27/player/{player.ea_id}/x",
+                    list_name="popular",
+                    player_id=player.id,
+                    first_seen_at=now,
+                    last_seen_at=now,
+                )
+            )
+        prices = [20_000] * 6 + [20_000, 20_250, 20_500, 20_750, 21_000, 21_500]
+        for at, price in hourly(prices):
+            repo.add_snapshot(session, rising, Platform.PC, price, "futbin", at)
+            repo.add_snapshot(session, flat, Platform.PC, 20_000, "futbin", at)
+        found = radar.hits(session, collector.settings, now)
+    assert [h.player.ea_id for h in found] == [1]
+    assert found[0].signals[0].kind is rs.RadarKind.TREND_START
+    assert found[0].list_name == "popular"
+    assert not found[0].on_watchlist

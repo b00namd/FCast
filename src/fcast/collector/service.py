@@ -21,6 +21,7 @@ from fcast.db.base import utcnow
 from fcast.db.session import create_db_engine, create_session_factory, session_scope
 from fcast.holo import discover_pairs, due_holo_cards
 from fcast.promos.service import due_pool_cards, fill_pool, sync_feeds
+from fcast.radar import service as radar
 from fcast.sources.base import PriceSource, SourceBlockedError
 from fcast.sources.futbin import FutbinSource
 from fcast.sources.registry import build_sources, make_http_client
@@ -155,6 +156,8 @@ class Collector:
             with session_scope(self.session_factory) as session:
                 pool = due_pool_cards(session, utcnow(), self.settings)
                 pool += due_holo_cards(session, utcnow(), self.settings)
+            scanned = [ea_id for ea_id in await self._radar_prepare() if ea_id not in pool]
+            pool += scanned
             self.last_result = await collect_once(
                 self.session_factory,
                 self.sources,
@@ -166,9 +169,33 @@ class Collector:
                 extra_ea_ids=pool,
             )
             self._runs += 1
+            if scanned:
+                with session_scope(self.session_factory) as session:
+                    radar.mark_checked(session, scanned, self.last_result.started_at)
             await self._pair_holos()
             await self._send_alerts(self.last_result)
             return self.last_result
+
+    async def _radar_prepare(self) -> list[int]:
+        """Market scanner: refresh lists and fodder when due, resolve new cards, pick due ones."""
+        source = self._futbin()
+        if source is None or self.settings.radar_per_run == 0:
+            return []
+        now = utcnow()
+        with session_scope(self.session_factory) as session:
+            if FUTBIN in repo.paused_sources(session, now):
+                return []
+        try:
+            await radar.refresh_universe(source, self.session_factory, self.settings, now)
+            await radar.refresh_fodder(source, self.session_factory, self.settings, now)
+            await radar.resolve_pending(source, self.session_factory, self.settings, now)
+        except SourceBlockedError as exc:
+            logger.warning("FUTBIN refused the radar scan: %s", exc)
+            return []  # the price run right after pauses the source if it keeps refusing
+        except Exception:
+            logger.exception("radar scan preparation failed")
+        with session_scope(self.session_factory) as session:
+            return radar.due_cards(session, self.settings, now)
 
     async def _pair_holos(self) -> None:
         """Find holo versions of watched cards (FUTBIN pages are mostly cached by now)."""

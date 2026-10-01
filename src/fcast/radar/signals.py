@@ -10,7 +10,7 @@ Scores are 0-100; a card's potential is its strongest signal plus a bonus for ea
 """
 
 import statistics
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -205,7 +205,7 @@ class FodderLine:
 
 
 def fodder_lines(
-    history: dict[int, Sequence[Point]], now: datetime, cfg: RadarConfig
+    history: Mapping[int, Sequence[Point]], now: datetime, cfg: RadarConfig
 ) -> list[FodderLine]:
     """Current fodder price per rating and its change over the window."""
     lines = []
