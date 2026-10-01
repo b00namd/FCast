@@ -7,7 +7,13 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from fcast.analysis.cards import CardValue, card_values, expected_price, price_fit
+from fcast.analysis.cards import (
+    CardValue,
+    card_values,
+    expected_price,
+    play_value_validated,
+    price_fit,
+)
 from fcast.analysis.stats import Point
 from fcast.collector.job import apply_player_info
 from fcast.config import Settings
@@ -255,7 +261,8 @@ def hits(session: Session, settings: Settings, now: datetime) -> list[RadarHit]:
         usage[player.id] = rs.usage_rates(observed, now, cfg.usage_window_h)
     median = rs.cohort_median([current for current, _ in usage.values()])
     values = card_values(session, settings, now)
-    fit = price_fit(values)
+    # "Undervalued" rests on the play value: only once it is validated against real usage.
+    fit = price_fit(values) if play_value_validated(values) else None
 
     found = []
     for player in players:

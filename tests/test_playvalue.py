@@ -194,10 +194,10 @@ def test_undervalued_signal() -> None:
 
 
 def test_price_fit_finds_what_quality_usually_costs(factory: sessionmaker[Session]) -> None:
-    # 20 strikers: price doubles every 10 play-value points; one strong card is cheap.
+    # 45 strikers: price doubles every 10 play-value points; one strong card is cheap.
     with factory.begin() as session:
-        for i in range(20):
-            level = 70 + i  # stat level -> play value rises with i
+        for i in range(45):
+            level = 70 + i // 2  # stat level -> play value rises with i
             stats = {name: level for name in pv.WEIGHTS[pv.STRIKER]}
             player = repo.upsert_player(
                 session,
@@ -214,18 +214,18 @@ def test_price_fit_finds_what_quality_usually_costs(factory: sessionmaker[Sessio
             value = pv.play_value(CardAttributes(stats=stats), "ST")
             assert value is not None
             price = round(5_000 * 2 ** ((value.score - 30) / 10) * 1.1 ** (i % 3))
-            if i == 18:
+            if i == 40:
                 price = 3_000  # the bargain
             repo.add_snapshot(session, player, Platform.PC, price, "futbin", NOW)
         values = cards.card_values(session, settings(), NOW)
     fit = cards.price_fit(values)
-    assert fit is not None and fit.cards == 20
+    assert fit is not None and fit.cards == 45
     bargain = next(v for v in values.values() if v.price == 3_000)
     expected = cards.expected_price(fit, bargain)
     assert expected is not None and expected > 20_000
     assert rs.undervalued(bargain.meta, bargain.price, expected, rs.RadarConfig()) is not None
     check = cards.agreement(values)
-    assert (check.cards, check.basis) == (20, "Spiele gesamt, Preis herausgerechnet (Gold)")
+    assert (check.cards, check.basis) == (45, "Spiele gesamt, Preis herausgerechnet (Gold)")
     assert check.correlation is not None
 
 
@@ -268,3 +268,17 @@ def test_special_and_holo_cards_are_not_compared(factory: sessionmaker[Session])
     assert not value.base_card
     fit = cards.PriceFit(0.0, 0.1, 0.0, 20)
     assert cards.expected_price(fit, value) is None  # special cards are a market of their own
+
+
+def test_undervalued_needs_enough_cards_and_a_validated_play_value() -> None:
+    def value(i: int, games: int) -> cards.CardValue:
+        play = pv.PlayValue(50.0 + i, pv.STRIKER, 80.0, ())
+        return cards.CardValue(i, play, 50.0 + i, 10_000 + 2_000 * (i % 2), None, games, 85, True)
+
+    few = {i: value(i, 1_000) for i in range(20)}
+    assert cards.price_fit(few) is None  # 20 cards are not enough for a price curve
+    # Better cards played less for their price: the play value is not confirmed.
+    contradicted = {i: value(i, 100_000 - 2_000 * i) for i in range(20)}
+    assert not cards.play_value_validated(contradicted)
+    confirmed = {i: value(i, 1_000 + 2_000 * i) for i in range(20)}
+    assert cards.play_value_validated(confirmed)

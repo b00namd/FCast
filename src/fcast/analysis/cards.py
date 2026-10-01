@@ -23,7 +23,8 @@ from fcast.radar.signals import usage_rates
 
 RECENT = timedelta(days=3)
 MIN_FIT_PRICE = 2_000  # cheaper cards sit at the market floor; their price says nothing
-MIN_FIT_CARDS = 15
+MIN_FIT_CARDS = 40  # fewer cards gave implausible curves (higher rating = cheaper)
+MIN_AGREEMENT = 0.2  # the play value must demonstrably go along with real usage
 MIN_RATE_PAIRS = 8
 BASE_TYPES = ("gold", "silver", "bronze")
 
@@ -126,8 +127,8 @@ def price_fit(values: dict[int, CardValue]) -> PriceFit | None:
             for j in range(3):
                 xtx[i][j] += x[i] * x[j]
     beta = _solve3(xtx, xty)
-    if beta is None or beta[1] <= 0:
-        return None  # better cards are not more expensive: the fit says nothing
+    if beta is None or beta[1] <= 0 or beta[2] < 0:
+        return None  # better or higher rated cards are not more expensive: implausible
     return PriceFit(beta[0], beta[1], beta[2], len(rows))
 
 
@@ -203,3 +204,9 @@ def stat_drivers(
         if corr is not None:
             found.append((name, corr, len(pairs)))
     return sorted(found, key=lambda item: -item[1])
+
+
+def play_value_validated(values: dict[int, CardValue]) -> bool:
+    """True once the play value is shown to go along with real usage."""
+    check = agreement(values)
+    return check.correlation is not None and check.correlation >= MIN_AGREEMENT

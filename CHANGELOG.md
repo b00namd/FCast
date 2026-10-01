@@ -5,6 +5,10 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 ## [Unreleased]
 
 ### Phase 11 – Kartenbewertung
+- **Behoben (01.10.):** „Unterbewertet“ feuerte direkt nach dem Start 8 Pushes auf Basis eines
+  noch unbestätigten Spielwerts und einer Preiskurve aus 18 Karten (höheres Rating = billiger).
+  Das Signal ist jetzt erst aktiv ab 40 bepreisten Goldkarten, mit plausibler Kurve und wenn der
+  Spielwert nachweislich zur Nutzung passt (Übereinstimmung ≥ +0,2, Preis herausgerechnet).
 - **Kartenwerte** von der FUTBIN-Spielerseite bei jeder Abfrage (keine Extra-Anfrage):
   Haupt- und Einzelwerte, PlayStyles inkl. PlayStyle+, Skills, schwacher Fuß, Größe,
   Körpertyp, starker Fuß, AcceleRATE (Spalte `players.attributes`, JSON).

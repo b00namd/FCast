@@ -81,7 +81,7 @@
     <li><strong>Trend-Start:</strong> Der Preis steigt seit mehreren Abfragen stetig (mind. {{ settings.radar_trend_min_pct | int }} % in 12 h, höchstens 30 % – danach ist der Sprung schon passiert).</li>
     <li><strong>Angebot schrumpft:</strong> Die Zahl der günstigen Angebote sinkt deutlich, während der Preis hält – Vorstufe zu ÜV oder extinct.</li>
     <li><strong>Nutzung steigt:</strong> Die Karte wird viel öfter gespielt als am Vortag und mehr als die typische Karte – Nachfrage kommt oft vor dem Preis.</li>
-    <li><strong>Unterbewertet:</strong> Goldkarte mit Spielwert ab 65, aber mindestens 40 % billiger als Goldkarten mit ähnlichem Spielwert und Rating normalerweise kosten.</li>
+    <li><strong>Unterbewertet:</strong> Goldkarte mit Spielwert ab 65, aber mindestens 40 % billiger als Goldkarten mit ähnlichem Spielwert und Rating normalerweise kosten. Erst aktiv, wenn mindestens 40 Goldkarten bepreist sind und der Spielwert nachweislich zur echten Nutzung passt (Übereinstimmung ab +0,2).</li>
     <li><strong>Futter zieht an:</strong> Die günstigsten Karten eines Ratings werden deutlich teurer – oft kündigt sich eine große SBC an.</li>
     <li>Potenzial = stärkstes Signal + 5 Punkte je weiterem Signal. Ab {{ settings.radar_alert_score | int }} kommt ein Push (höchstens einmal am Tag pro Karte).</li>
   </ul>
