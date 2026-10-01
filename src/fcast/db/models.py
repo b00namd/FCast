@@ -243,6 +243,49 @@ class MarketObservation(Base):
         return tuple(int(value) for value in self.listings_csv.split(",") if value)
 
 
+class RadarCard(Base):
+    """A card in the market scanner's universe (from FUTBIN lists), priced every few hours."""
+
+    __tablename__ = "radar_cards"
+
+    futbin_ref: Mapped[str] = mapped_column(String(200), primary_key=True)
+    list_name: Mapped[str] = mapped_column(String(16))  # popular, latest, totw
+    player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"))
+    first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    checked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    player: Mapped[Player | None] = relationship()
+
+
+class UsageObservation(Base):
+    """History of FUTBIN's games-played counter of a card (configured platform)."""
+
+    __tablename__ = "usage_observations"
+    __table_args__ = (
+        Index("ix_usage_observations_player_id_observed_at", "player_id", "observed_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"))
+    observed_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    games: Mapped[int]
+
+
+class FodderPrice(Base):
+    """SBC fodder index: mean of the three cheapest cards of a rating on FUTBIN."""
+
+    __tablename__ = "fodder_prices"
+    __table_args__ = (Index("ix_fodder_prices_rating_observed_at", "rating", "observed_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    platform: Mapped[Platform] = mapped_column(str_enum(Platform))
+    rating: Mapped[int]
+    price: Mapped[int]
+    observed_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
 class AppSetting(Base):
     """Key/value settings changed in the dashboard; they override environment defaults."""
 

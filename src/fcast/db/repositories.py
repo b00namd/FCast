@@ -26,6 +26,7 @@ from fcast.db.models import (
     PromoLink,
     SourceRef,
     SourceStatus,
+    UsageObservation,
     WatchlistEntry,
 )
 
@@ -261,6 +262,30 @@ def _record_observation(session: Session, state: MarketState, range_max: int | N
                 range_max=range_max,
             )
         )
+
+
+def record_usage(session: Session, player: Player, games: int, observed_at: datetime) -> bool:
+    """Append FUTBIN's games counter if it changed since the last observation."""
+    last = session.scalar(
+        select(UsageObservation)
+        .where(UsageObservation.player_id == player.id)
+        .order_by(UsageObservation.observed_at.desc(), UsageObservation.id.desc())
+        .limit(1)
+    )
+    if last is not None and last.games == games:
+        return False
+    session.add(UsageObservation(player_id=player.id, observed_at=observed_at, games=games))
+    session.flush()
+    return True
+
+
+def list_usage(
+    session: Session, player: Player, since: datetime | None = None
+) -> Sequence[UsageObservation]:
+    stmt = select(UsageObservation).where(UsageObservation.player_id == player.id)
+    if since is not None:
+        stmt = stmt.where(UsageObservation.observed_at >= since)
+    return session.scalars(stmt.order_by(UsageObservation.observed_at, UsageObservation.id)).all()
 
 
 def list_market_observations(

@@ -144,8 +144,30 @@ Einstellungen, Verlauf und Test-Push; CLI `fcast alert test|check`.
 
 ---
 
+## Phase 10 – Potenzial-Radar
+Ziel: Chancen erkennen, bevor sie offensichtlich sind – auch bei Karten, die nicht auf der Watchlist
+stehen. (Portfolio/Verkaufs-Tracking hat der Nutzer bewusst zurückgestellt, siehe Backlog.)
+
+**Aufgaben**
+- **Markt-Scanner:** FUTBIN-Listen „Popular“, „New Players“ und das aktuelle TOTW alle 12 h
+  einlesen (Radar-Bestand); pro Sammellauf einige Radar-Karten bepreisen, jede etwa alle 6 h
+- **Verlauf der Spielzahl** (FUTBIN „Games“) pro Karte
+- **Futter-Index:** FUTBIN „Cheapest Players“ je Rating 82–90 alle 6 h (Ø der drei günstigsten)
+- **Frühsignale:** Trend-Start (stetiger Anstieg, noch kein Sprung), Angebot schrumpft, Nutzung
+  steigt (Wachstum der Spielzahl gegenüber den anderen Karten), Futter zieht an
+- **Seite „Radar“** mit Potenzial-Score, Begründung und „Beobachten“; Push für starke Treffer
+  (abschaltbar); Abschnitt in `fcast lage`
+- **Backtest:** Trend-Start nachspielen
+
+**Abnahme**
+- Parser mit FUTBIN-Fixtures getestet; Signale mit konstruierten Reihen
+- Anfragen bleiben im Rahmen (Scanner-Last konfigurierbar, Zähler im Test)
+
+---
+
 ## Später / Ideen-Backlog
-- **Portfolio & Profit** (bisher Phase 6): Käufe/Verkäufe erfassen, realisierter Profit nach Steuer,
+- **Portfolio & Profit** (zurückgestellt 01.10.2026; Import gespeicherter Web-App-Seiten per
+  Strg+S wäre technisch möglich, Kaufpreise stehen nur in den Transferzielen): Käufe/Verkäufe erfassen, realisierter Profit nach Steuer,
   offene Positionen, Verkaufsempfehlung, Risiko-Limit
 - **SBC-Futter-Tracker** (bisher Phase 9): günstigste Preise je Rating-Stufe 82–90, Signal `FODDER_STOCK`
 - Sentiment-Signal (Reddit-Titel nach Spielernamen, Hype-Score)

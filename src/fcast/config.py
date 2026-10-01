@@ -121,6 +121,22 @@ class Settings(BaseSettings):
     promo_weight_nation: float = Field(default=0.3, ge=0, le=1)
     promo_prebuy_threshold: float = Field(default=45.0, ge=0, le=100)
 
+    # --- Potential radar (market scanner) ---
+    # FUTBIN lists (Popular, New Players, current TOTW) are read every `radar_universe_h`
+    # hours; up to `radar_list_limit` cards per list. Each collector run prices up to
+    # `radar_per_run` radar cards that were not checked for `radar_interval_h` hours and looks
+    # up at most `radar_resolve_per_run` new ones. 0 cards per run switches the scanner off.
+    radar_per_run: int = Field(default=15, ge=0, le=60)
+    radar_interval_h: float = Field(default=6.0, ge=1)
+    radar_universe_h: float = Field(default=12.0, ge=1)
+    radar_list_limit: int = Field(default=150, ge=10, le=300)
+    radar_resolve_per_run: int = Field(default=5, ge=0, le=30)
+    radar_fodder_h: float = Field(default=6.0, ge=1)
+    radar_trend_min_pct: float = Field(default=5.0, gt=0)
+    radar_usage_accel: float = Field(default=1.5, gt=1)
+    radar_fodder_min_pct: float = Field(default=8.0, gt=0)
+    radar_alert_score: float = Field(default=70.0, ge=0, le=100)
+
     # --- Holo pairs ---
     # Signal HOLO_SPREAD when the holo trades at least this much above the normal card.
     holo_min_spread_pct: float = Field(default=30.0, ge=0)

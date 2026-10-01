@@ -274,6 +274,8 @@ async def collect_once(
                         entry.checked_at = result.started_at
                 if info is not None:
                     apply_player_info(session, info)
+                    if info.games_used is not None:
+                        repo.record_usage(session, player, info.games_used, result.started_at)
                 for observation in fetch.markets:
                     repo.record_market_state(
                         session,
