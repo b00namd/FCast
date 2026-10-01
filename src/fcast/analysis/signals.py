@@ -252,7 +252,8 @@ def overprice_chance(
     extinct = supply is not None and supply.extinct
     # Extinct cards cannot be bought, so the profit only applies to cards you already own.
     expected = None if extinct else profit(stats.current, target)
-    if expected is not None and expected <= 0:
+    # Same bar as BUY_DIP: buying now and listing at the target must be worth it.
+    if expected is not None and expected < _required_profit(stats.current, cfg):
         return None
     return Signal(
         rule=Rule.OVERPRICE_CHANCE,

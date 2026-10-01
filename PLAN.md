@@ -123,6 +123,24 @@ Einstellungen, Verlauf und Test-Push; CLI `fcast alert test|check`.
 
 ---
 
+## Phase 9 – Betrieb & bessere Signale
+**Aufgaben**
+- **Abfrage-Stufen:** Abfrage-Intervall pro Watchlist-Karte (jede Runde, alle 2 h, alle 6 h);
+  Collector überspringt Karten, die noch nicht fällig sind. Einstellbar in Watchlist und CLI
+- **Backup:** täglich (Uhrzeit konfigurierbar) per SQLite-Backup-API, Aufbewahrung 14 Tage,
+  `fcast db backup`; auf dem Server in ein Host-Verzeichnis außerhalb des Docker-Volumes
+- **Verlauf der Angebotslage:** jede Beobachtung (Angebote, EA-Spanne) speichern; daraus
+  „dünnes Angebot seit X h“ für ÜV-Score, Spielerdetail und `fcast lage`
+- **ÜV backtestbar:** `OVERPRICE_CHANCE` im Backtest auf dem Angebots-Verlauf nachspielen
+  (Kauf, Einstellen zum Ziel, verkauft sobald der Markt das Ziel erreicht)
+- **Mindestprofit für ÜV-Chancen** wie beim Kauf-Dip
+
+**Abnahme**
+- Tests: Intervall-Logik, Backup inkl. Aufräumen, Verlauf/Dünn-seit, ÜV-Backtest mit bekannter Reihe
+- Migration läuft auf der bestehenden Datenbank ohne Datenverlust
+
+---
+
 ## Später / Ideen-Backlog
 - **Portfolio & Profit** (bisher Phase 6): Käufe/Verkäufe erfassen, realisierter Profit nach Steuer,
   offene Positionen, Verkaufsempfehlung, Risiko-Limit

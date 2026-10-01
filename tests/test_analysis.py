@@ -206,6 +206,16 @@ def test_overprice_chance_with_thin_supply() -> None:
     assert any("Lücke" in reason for reason in signal.reasons)
 
 
+def test_no_overprice_chance_for_a_tiny_profit() -> None:
+    # Thin supply and rising, but the next listing is only two steps up: after tax a loss-ish
+    # few coins, below the minimum profit (like Khusanov: +12 coins at 28,250 -> 29,750).
+    stats = price_stats(rising(28_250), NOW)
+    supply = sig.Supply(listings=(28_250, 30_000), range_max=60_000)
+    score = sig.overprice_score(stats, supply, CFG)
+    assert score is not None and score.score >= CFG.uev_threshold
+    assert sig.overprice_chance(1, "X", stats, supply, CFG) is None
+
+
 def test_no_overprice_chance_with_deep_supply() -> None:
     stats = price_stats(flat(100_000), NOW)
     supply = sig.Supply(listings=(100_000, 100_000, 101_000, 101_000, 102_000), range_max=300_000)
