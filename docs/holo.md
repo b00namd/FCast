@@ -36,6 +36,11 @@ Quellen: [Dexerto – Holographic & Pristine cards](https://www.dexerto.com/wiki
 - **Signal `HOLO_SPREAD` („Holo-ÜV“)**: Holo mindestens `FCAST_HOLO_MIN_SPREAD_PCT` (30 %) über der
   normalen Karte → normale Karte eine Preisstufe unter dem Holo-Preis einstellen (gedeckelt durch
   EA-Maximum), Profit nach Steuer. Bei extinct Holo gilt der letzte bekannte Preis (gekennzeichnet).
+- **Nur realistische Fälle** (seit 01.10.2026): Abstand höchstens `FCAST_HOLO_MAX_SPREAD_PCT`
+  (150 %), normale Karte knapp (weniger als 5 Angebote) und mindestens `FCAST_HOLO_MIN_HISTORY_H`
+  (48 h) Preisverlauf. Anlass: Am Tag nach TOTW 3 standen die Holos bei Release-Preisen
+  (Son normal 52.500, Holo 750.000) – die Regel hätte „normale Karte zu 500.000 einstellen“
+  empfohlen.
 - **Hinweis:** Ob sich die normale Karte zum Holo-Preis verkauft, hängt davon ab, dass Käufer die
   Versionen verwechseln oder gezielt suchen. FCast zeigt die Chance, nicht die Wahrscheinlichkeit –
   das Backtesting (Phase 8) soll zeigen, wie oft es klappt.

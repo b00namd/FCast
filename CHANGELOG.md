@@ -5,6 +5,10 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 ## [Unreleased]
 
 ### Behoben
+- **Holo-ÜV nur noch realistisch:** höchstens +150 % Abstand (`FCAST_HOLO_MAX_SPREAD_PCT`),
+  normale Karte knapp (< 5 Angebote), mindestens 48 h Preisverlauf (`FCAST_HOLO_MIN_HISTORY_H`).
+  Vorher meldete FCast bei frischen TOTW-Karten z. B. „normale Son-Karte (52.500) zu 500.000
+  einstellen“.
 - **Kauf-Dip bei neuen Karten:** Ein frisch erschienenes TOTW fällt in den ersten Stunden stark;
   der „Ø 7 Tage“ bestand dann nur aus den Release-Preisen und löste falsche Kauf-Alerts aus
   (z. B. Gyökeres bei 122.000, danach 86.000). `BUY_DIP` braucht jetzt mindestens 3 Tage

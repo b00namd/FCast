@@ -120,6 +120,10 @@ class Settings(BaseSettings):
     # --- Holo pairs ---
     # Signal HOLO_SPREAD when the holo trades at least this much above the normal card.
     holo_min_spread_pct: float = Field(default=30.0, ge=0)
+    # Above this spread nobody pays the holo price for the normal card (e.g. launch prices of a
+    # fresh TOTW holo); the normal card must be scarce and have some price history.
+    holo_max_spread_pct: float = Field(default=150.0, gt=0)
+    holo_min_history_h: float = Field(default=48.0, ge=0)
     # Holo partners of watched cards are priced every `holo_interval_h` hours.
     holo_interval_h: float = Field(default=2.0, ge=0.5)
     # Holo versions looked up on FUTBIN per collector run.

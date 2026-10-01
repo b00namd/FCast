@@ -73,6 +73,8 @@ class SignalConfig:
     uev_min_markup_pct: float = 5.0
     uev_extinct_markup_pct: float = 20.0
     holo_min_spread_pct: float = 30.0
+    holo_max_spread_pct: float = 150.0
+    holo_min_history_h: float = 48.0
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "SignalConfig":
@@ -288,14 +290,22 @@ def holo_spread(
     supply: Supply | None,
     cfg: SignalConfig,
 ) -> Signal | None:
-    """The holo trades far above the normal card: list the normal one just below the holo."""
+    """The holo trades far above the normal card: list the normal one just below the holo.
+
+    Only when it is realistic: a moderate spread, the normal card is scarce (fewer than five
+    listings) and there is enough price history (fresh cards still fall from launch prices).
+    """
     spread = holo_spread_pct(stats.current, holo)
     if spread is None or holo is None or holo.price is None or stats.current is None:
         return None
-    if spread < cfg.holo_min_spread_pct:
+    if not cfg.holo_min_spread_pct <= spread <= cfg.holo_max_spread_pct:
+        return None
+    if supply is None or supply.extinct or len(supply.listings) >= FULL_LISTINGS:
+        return None
+    if stats.week is None or stats.week.span < timedelta(hours=cfg.holo_min_history_h):
         return None
     target = step_price(round_to_price_step(holo.price, "down"), -1)
-    if supply is not None and supply.range_max:
+    if supply.range_max:
         target = min(target, round_to_price_step(supply.range_max, "down"))
     expected = profit(stats.current, target)
     if expected <= 0:
@@ -305,8 +315,7 @@ def holo_spread(
     ]
     if holo.extinct:
         reasons.append("Holo gerade extinct" + (" (letzter bekannter Preis)" if holo.stale else ""))
-    if supply is not None and not supply.extinct and len(supply.listings) < FULL_LISTINGS:
-        reasons.append(f"normale Karte knapp ({len(supply.listings)} Angebote)")
+    reasons.append(f"normale Karte knapp ({len(supply.listings)} Angebote)")
     return Signal(
         rule=Rule.HOLO_SPREAD,
         ea_id=ea_id,

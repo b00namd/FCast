@@ -54,8 +54,11 @@ def test_holo_id_is_normal_id_plus_two_to_the_24th() -> None:
 # --- signal --------------------------------------------------------------------------------
 
 
-def stats_at(price: int) -> sig.PriceStats:  # type: ignore[name-defined]
-    return price_stats([(NOW - timedelta(hours=h), price) for h in range(0, 30)], NOW)
+def stats_at(price: int, hours: int = 72) -> sig.PriceStats:  # type: ignore[name-defined]
+    return price_stats([(NOW - timedelta(hours=h), price) for h in range(0, hours)], NOW)
+
+
+SCARCE = sig.Supply(listings=(1_380_000, 1_400_000), range_max=10_000_000)
 
 
 def test_holo_spread_signal() -> None:
@@ -72,7 +75,7 @@ def test_holo_spread_signal() -> None:
 
 def test_holo_spread_below_threshold_or_unprofitable() -> None:
     small = sig.HoloQuote(price=1_200_000, extinct=False)  # +11 %
-    assert sig.holo_spread(1, "X", stats_at(1_080_000), small, None, CFG) is None
+    assert sig.holo_spread(1, "X", stats_at(1_080_000), small, SCARCE, CFG) is None
     no_price = sig.HoloQuote(price=None, extinct=True)
     assert sig.holo_spread(1, "X", stats_at(1_080_000), no_price, None, CFG) is None
     capped = sig.Supply(listings=(1_000,), range_max=1_000)
@@ -80,9 +83,24 @@ def test_holo_spread_below_threshold_or_unprofitable() -> None:
     assert sig.holo_spread(1, "X", stats_at(1_000), big, capped, CFG) is None  # EA max = price
 
 
+def test_holo_spread_only_when_realistic() -> None:
+    holo = sig.HoloQuote(price=2_000_000, extinct=False)  # +45 % over 1,380,000
+    assert sig.holo_spread(1, "X", stats_at(1_380_000), holo, SCARCE, CFG) is not None
+    # A fresh TOTW: holo at launch price, ten times the normal card.
+    launch = sig.HoloQuote(price=750_000, extinct=False)
+    cheap = sig.Supply(listings=(52_500, 53_000), range_max=500_000)
+    assert sig.holo_spread(1, "Son", stats_at(52_500), launch, cheap, CFG) is None
+    # Plenty of normal cards on the market: nobody pays the holo price.
+    full = sig.Supply(listings=(1_380_000,) * 5, range_max=10_000_000)
+    assert sig.holo_spread(1, "X", stats_at(1_380_000), holo, full, CFG) is None
+    # No supply data or too little history.
+    assert sig.holo_spread(1, "X", stats_at(1_380_000), holo, None, CFG) is None
+    assert sig.holo_spread(1, "X", stats_at(1_380_000, hours=24), holo, SCARCE, CFG) is None
+
+
 def test_extinct_holo_uses_last_known_price() -> None:
     holo = sig.HoloQuote(price=3_000_000, extinct=True, stale=True)
-    signal = sig.holo_spread(1, "Olise", stats_at(1_380_000), holo, None, CFG)
+    signal = sig.holo_spread(1, "Olise", stats_at(1_380_000), holo, SCARCE, CFG)
     assert signal is not None
     assert "Holo gerade extinct (letzter bekannter Preis)" in signal.reasons
 
@@ -195,9 +213,13 @@ async def test_analysis_shows_holo_and_signal(factory: sessionmaker[Session]) ->
         olise = repo.get_player_by_ea_id(session, 50579475)
         holo = repo.get_player_by_ea_id(session, 67356691)
         assert olise is not None and holo is not None
-        for hours in range(0, 24):
+        for hours in range(0, 72):  # three days of history
             at = NOW - timedelta(hours=hours)
             repo.add_snapshot(session, olise, Platform.PC, 1_380_000, "futbin", at)
+        # The normal card is scarce: only two listings.
+        repo.record_market_state(
+            session, olise, Platform.PC, "futbin", NOW, (1_380_000, 1_420_000), 50_000, 5_000_000
+        )
         repo.add_snapshot(session, holo, Platform.PC, 2_499_000, "futbin", NOW)
         result = analyze_player(session, olise, settings(), NOW)
     assert result.holo_player is not None
