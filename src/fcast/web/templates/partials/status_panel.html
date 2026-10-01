@@ -31,6 +31,13 @@
     <p class="muted">
       Intervall {{ settings.collect_interval_min }} min{% if next_run %} · nächster Lauf {{ next_run | dt("%H:%M") }}{% endif %}
       · Strategie {{ settings.source_strategy }}
+      {% if result and result.deferred %}· {{ result.deferred }} Karten im langsamen Takt übersprungen{% endif %}
+    </p>
+    <p class="muted">
+      Backup täglich {{ settings.backup_time }} Uhr:
+      {% if last_backup %}zuletzt {{ last_backup.created_at | dt("%d.%m. %H:%M") }}
+        ({{ (last_backup.size / 1048576) | round(1) | string | replace(".", ",") }} MB, {{ backup_count }} aufbewahrt)
+      {% else %}<span class="down">noch keins</span>{% endif %}
     </p>
     <footer>
       <button hx-post="/status/collect" hx-target="#status-panel" hx-swap="outerHTML"

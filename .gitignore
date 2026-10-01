@@ -28,3 +28,6 @@ Thumbs.db
 
 # Manual price import (may contain personal data)
 import/
+
+# Database backups (server: ~/fcast/backups)
+backups/

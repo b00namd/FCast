@@ -13,6 +13,7 @@ services:
     environment:
       FCAST_DB_PATH: /data/fcast.db
       FCAST_MANUAL_CSV: /import/prices.csv
+      FCAST_BACKUP_DIR: /backups
       FCAST_WEB_PORT: "8000"
     ports:
       # LAN only – do not forward this port on the router; use a VPN for remote access.
@@ -21,6 +22,8 @@ services:
       - fcast-data:/data
       # Drop a prices.csv here to feed the manual price source.
       - ./import:/import:ro
+      # Daily database backups on the host, outside the Docker volume (see README).
+      - ./backups:/backups
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
       interval: 60s

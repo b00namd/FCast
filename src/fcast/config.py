@@ -36,6 +36,10 @@ class Settings(BaseSettings):
 
     platform: Platform = Platform.CONSOLE
     db_path: Path = Path("data/fcast.db")
+    # Daily database backup at `backup_time` (local); default directory next to the database.
+    backup_dir: Path | None = None
+    backup_time: str = "03:30"
+    backup_keep: int = Field(default=14, ge=1, le=365)
     # Push alerts via ntfy (self-hosted). Without URL alerts are only logged.
     ntfy_url: str | None = None
     ntfy_topic: str = "fcast"
@@ -150,7 +154,7 @@ class Settings(BaseSettings):
             raise ValueError(f"unknown timezone: {value}") from exc
         return value
 
-    @field_validator("quiet_hours_start", "quiet_hours_end", "totw_release_time")
+    @field_validator("quiet_hours_start", "quiet_hours_end", "totw_release_time", "backup_time")
     @classmethod
     def _valid_clock_time(cls, value: str) -> str:
         if not is_clock_time(value):
@@ -181,6 +185,10 @@ class Settings(BaseSettings):
 
         contact = f"; {self.http_contact}" if self.http_contact else ""
         return f"FCast/{__version__} (private price tracker{contact})"
+
+    @property
+    def backup_path(self) -> Path:
+        return self.backup_dir or self.db_path.parent / "backups"
 
     @property
     def db_url(self) -> str:

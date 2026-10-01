@@ -24,6 +24,7 @@ from fcast.collector.job import apply_player_info
 from fcast.collector.service import JOB_ID, Collector
 from fcast.config import Platform, Settings, is_clock_time
 from fcast.db import repositories as repo
+from fcast.db.backup import list_backups
 from fcast.db.base import utcnow
 from fcast.db.models import LeakItem, LinkType, Player, Promo, TotwActual, TotwPrediction
 from fcast.db.session import session_scope
@@ -499,12 +500,15 @@ def _status_context(request: Request) -> dict[str, Any]:
             }
             for name in dict.fromkeys([*configured, *statuses])
         ]
+    backups = list_backups(settings.backup_path)
     return {
         "running": running,
         "result": collector.last_result,
         "next_run": job.next_run_time if job is not None else None,
         "sources": sources,
         "settings": settings,
+        "last_backup": backups[0] if backups else None,
+        "backup_count": len(backups),
     }
 
 

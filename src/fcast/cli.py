@@ -106,6 +106,24 @@ def db_upgrade(
     typer.echo(f"Database at {settings.db_path} is up to date ({revision}).")
 
 
+@db_app.command("backup")
+def db_backup() -> None:
+    """Back up the database now (also runs daily at FCAST_BACKUP_TIME)."""
+    from fcast.db.backup import backup_database, list_backups
+    from fcast.db.base import utcnow
+
+    settings = get_settings()
+    try:
+        target = backup_database(
+            settings.db_path, settings.backup_path, utcnow(), settings.backup_keep
+        )
+    except (OSError, FileNotFoundError) as exc:
+        typer.secho(f"Error: backup failed: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
+    count = len(list_backups(settings.backup_path))
+    typer.echo(f"Backup written to {target} ({count} backups kept).")
+
+
 @watch_app.command("add")
 def watch_add(
     ea_id: Annotated[

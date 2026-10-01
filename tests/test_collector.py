@@ -8,7 +8,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from fcast.collector.job import collect_once, source_order
-from fcast.collector.service import JOB_ID, Collector, create_scheduler, run_forever
+from fcast.collector.service import (
+    BACKUP_JOB_ID,
+    JOB_ID,
+    Collector,
+    create_scheduler,
+    run_forever,
+)
 from fcast.config import Platform, Settings
 from fcast.db import repositories as repo
 from fcast.db.base import Base
@@ -223,6 +229,9 @@ async def test_scheduler_job_configuration(tmp_path: Path) -> None:
     assert job.trigger.interval.total_seconds() == 15 * 60
     assert job.max_instances == 1
     assert job.coalesce is True
+    backup = scheduler.get_job(BACKUP_JOB_ID)
+    assert str(backup.trigger.fields[5]) == "3"  # hour, local time (Europe/Berlin)
+    assert str(backup.trigger.fields[6]) == "30"
     await collector.aclose()
 
 

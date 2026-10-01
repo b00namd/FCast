@@ -6,6 +6,7 @@ import logging
 import signal
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -15,6 +16,7 @@ from fcast.collector.job import CollectResult, apply_player_info, collect_once
 from fcast.config import Settings
 from fcast.db import migrate
 from fcast.db import repositories as repo
+from fcast.db.backup import backup_database
 from fcast.db.base import utcnow
 from fcast.db.session import create_db_engine, create_session_factory, session_scope
 from fcast.holo import discover_pairs, due_holo_cards
@@ -225,12 +227,29 @@ class Collector:
             logger.exception("TOTW refresh failed")
         return self.last_totw
 
+    async def backup(self) -> Path | None:
+        """Daily database backup (in a thread: the SQLite copy blocks)."""
+        try:
+            return await asyncio.to_thread(
+                backup_database,
+                self.settings.db_path,
+                self.settings.backup_path,
+                utcnow(),
+                self.settings.backup_keep,
+            )
+        except Exception:
+            logger.exception("database backup failed")
+            return None
+
     async def aclose(self) -> None:
         for source in self.sources:
             await source.aclose()
         await self.alerts.aclose()
         await self.totw.openligadb.aclose()
         self.engine.dispose()
+
+
+BACKUP_JOB_ID = "backup"
 
 
 def create_scheduler(collector: Collector, interval_min: int, jitter_s: int = 0) -> Any:
@@ -267,6 +286,19 @@ def create_scheduler(collector: Collector, interval_min: int, jitter_s: int = 0)
         coalesce=True,
         misfire_grace_time=600,
         jitter=jitter_s or None,
+    )
+    settings = collector.settings
+    hours, minutes = settings.backup_time.split(":")
+    scheduler.add_job(
+        collector.backup,
+        "cron",
+        hour=int(hours),
+        minute=int(minutes),
+        timezone=settings.tz,
+        id=BACKUP_JOB_ID,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=3600,
     )
     return scheduler
 
