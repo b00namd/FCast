@@ -422,3 +422,44 @@ async def test_extra_cards_are_collected_like_watchlist_cards(
     assert result.players == 2  # the watched card is not counted twice
     assert sorted(source.calls) == [1, 7]
     assert sorted(price for _, price, _ in snapshots(factory)) == [1000, 7000]
+
+
+async def test_slow_cards_are_collected_only_when_due(factory: sessionmaker[Session]) -> None:
+    watch(factory, 1, 2)
+    with factory.begin() as session:
+        slow = repo.get_player_by_ea_id(session, 2)
+        assert slow is not None
+        repo.set_watch_interval(session, slow, 120)
+    source = FakeSource("fake", prices={1: 1000, 2: 2000})
+
+    first = await collect_once(factory, [source], Platform.CONSOLE)
+    assert sorted(source.calls) == [1, 2]  # never checked: due
+    assert first.deferred == 0
+
+    source.calls.clear()
+    second = await collect_once(factory, [source], Platform.CONSOLE)
+    assert source.calls == [1]  # the slow card was just checked
+    assert (second.players, second.deferred) == (1, 1)
+
+    with factory.begin() as session:  # two hours later (minus the jitter tolerance) it is due
+        player = repo.get_player_by_ea_id(session, 2)
+        assert player is not None
+        entry = repo.get_watch(session, player)
+        assert entry is not None and entry.checked_at is not None
+        entry.checked_at -= timedelta(minutes=116)
+    source.calls.clear()
+    await collect_once(factory, [source], Platform.CONSOLE)
+    assert sorted(source.calls) == [1, 2]
+
+
+def test_is_due() -> None:
+    from fcast.db.models import WatchlistEntry
+
+    now = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
+    entry = WatchlistEntry(interval_min=None, checked_at=now)
+    assert repo.is_due(entry, now)  # every run
+    entry.interval_min = 360
+    assert not repo.is_due(entry, now + timedelta(hours=5))
+    assert repo.is_due(entry, now + timedelta(hours=5, minutes=56))
+    entry.checked_at = None
+    assert repo.is_due(entry, now)

@@ -35,6 +35,7 @@ class CollectResult:
     players: int = 0
     stored: int = 0
     unchanged: int = 0
+    deferred: int = 0  # watchlist cards skipped because their interval has not passed
     missing: list[int] = field(default_factory=list)
     extinct: list[int] = field(default_factory=list)
     errors: dict[str, list[str]] = field(default_factory=dict)
@@ -229,12 +230,13 @@ async def collect_once(
     result = CollectResult(started_at=utcnow())
     with session_scope(factory) as session:
         paused_now = repo.paused_sources(session, result.started_at)
-        targets = [
-            (entry.player.ea_id, entry.player.name is None)
-            for entry in repo.list_watchlist(session, active_only=True)
-        ]
+        entries = repo.list_watchlist(session, active_only=True)
+        due = [entry for entry in entries if repo.is_due(entry, result.started_at)]
+        result.deferred = len(entries) - len(due)
+        targets = [(entry.player.ea_id, entry.player.name is None) for entry in due]
+        due_ids = {ea_id for ea_id, _ in targets}
         # Extra cards (e.g. the promo candidate pool) are priced like watchlist cards.
-        watched = {ea_id for ea_id, _ in targets}
+        watched = {entry.player.ea_id for entry in entries}
         for ea_id in extra_ea_ids:
             if ea_id not in watched:
                 player = repo.get_player_by_ea_id(session, ea_id)
@@ -266,6 +268,10 @@ async def collect_once(
         try:
             with session_scope(factory) as session:
                 player = repo.upsert_player(session, ea_id)
+                if ea_id in due_ids:
+                    entry = repo.get_watch(session, player)
+                    if entry is not None:
+                        entry.checked_at = result.started_at
                 if info is not None:
                     apply_player_info(session, info)
                 for observation in fetch.markets:
@@ -294,9 +300,10 @@ async def collect_once(
     except Exception:
         logger.exception("saving source status failed")
     logger.info(
-        "collect run: %d players, %d stored, %d unchanged, %d extinct, %d without price, "
-        "%d errors%s",
+        "collect run: %d players (%d not due), %d stored, %d unchanged, %d extinct, "
+        "%d without price, %d errors%s",
         result.players,
+        result.deferred,
         result.stored,
         result.unchanged,
         len(result.extinct),

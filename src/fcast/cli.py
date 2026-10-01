@@ -6,12 +6,15 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 from rich.console import Console
 from rich.table import Table
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    from fcast.db.models import Player
 
 from fcast import __version__
 from fcast.config import get_settings
@@ -188,6 +191,49 @@ def watch_add(
         )
 
 
+def format_interval(minutes: int | None) -> str:
+    if minutes is None:
+        return "every run"
+    return f"{minutes // 60} h" if minutes % 60 == 0 else f"{minutes} min"
+
+
+def _watched_player(session: Session, ea_id: int) -> "Player":
+    from fcast.db import repositories as repo
+
+    player = repo.get_player_by_ea_id(session, ea_id)
+    if player is None or repo.get_watch(session, player) is None:
+        typer.secho(f"Error: {ea_id} is not on the watchlist.", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+    return player
+
+
+@watch_app.command("interval")
+def watch_interval(
+    ea_id: Annotated[int, typer.Argument(help="EA card id.", min=1)],
+    minutes: Annotated[
+        int, typer.Argument(help="Collect every N minutes; 0 = every collector run.", min=0)
+    ],
+) -> None:
+    """Collect a card less often (e.g. 120 for every 2 h) to spare the price sources."""
+    from fcast.db import repositories as repo
+
+    with _db_session() as session:
+        player = _watched_player(session, ea_id)
+        repo.set_watch_interval(session, player, minutes or None)
+        typer.echo(f"{player.display_name}: {format_interval(minutes or None)}")
+
+
+@watch_app.command("remove")
+def watch_remove(ea_id: Annotated[int, typer.Argument(help="EA card id.", min=1)]) -> None:
+    """Remove a card from the watchlist (its price history is kept)."""
+    from fcast.db import repositories as repo
+
+    with _db_session() as session:
+        player = _watched_player(session, ea_id)
+        repo.remove_watch(session, player)
+        typer.echo(f"Removed {player.display_name} from the watchlist.")
+
+
 @watch_app.command("list")
 def watch_list(
     show_all: Annotated[
@@ -209,6 +255,7 @@ def watch_list(
         table.add_column("Target sell", justify="right")
         if show_all:
             table.add_column("Active")
+        table.add_column("Interval")
         table.add_column("Sources")
         table.add_column("Note")
         for entry in entries:
@@ -220,6 +267,7 @@ def watch_list(
             ]
             if show_all:
                 row.append("yes" if entry.active else "no")
+            row.append(format_interval(entry.interval_min))
             row.append(", ".join(sorted(repo.list_source_refs(session, entry.player))) or "-")
             row.append(entry.note or "")
             table.add_row(*row)

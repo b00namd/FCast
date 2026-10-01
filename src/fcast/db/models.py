@@ -99,6 +99,9 @@ class WatchlistEntry(Base):
     target_sell: Mapped[int | None]
     note: Mapped[str | None] = mapped_column(String(500))
     active: Mapped[bool] = mapped_column(default=True)
+    # Collect every `interval_min` minutes (None: every collector run) and when it was last done.
+    interval_min: Mapped[int | None]
+    checked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     player: Mapped[Player] = relationship(back_populates="watchlist_entry")
 

@@ -255,6 +255,19 @@ def test_watchlist_edit_update_and_toggle(client: TestClient, collector: Collect
     assert client.get("/watchlist/999/edit").status_code == 404
 
 
+def test_watchlist_collect_interval(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 7)
+    assert "jede Runde" in client.get("/watchlist/7/row").text
+    assert 'name="interval"' in client.get("/watchlist/7/edit").text
+
+    row = client.post("/watchlist/7", data={"interval": "360"})
+    assert "alle 6 h" in row.text
+    # Saving without the field (e.g. an old form) keeps the interval.
+    assert "alle 6 h" in client.post("/watchlist/7", data={"note": "x"}).text
+    assert "jede Runde" in client.post("/watchlist/7", data={"interval": "0"}).text
+    assert "Ungültiger Takt" in client.post("/watchlist/7", data={"interval": "7"}).text
+
+
 def test_futbin_link_can_be_removed(client: TestClient, collector: Collector) -> None:
     client.post(
         "/watchlist",

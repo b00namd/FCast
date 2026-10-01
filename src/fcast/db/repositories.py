@@ -5,7 +5,7 @@ Functions never commit; the caller owns the transaction (see `session_scope`).
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
@@ -27,6 +27,9 @@ from fcast.db.models import (
     SourceStatus,
     WatchlistEntry,
 )
+
+# Collector runs drift by a few minutes (jitter); a card due "in 2 minutes" is collected now.
+DUE_TOLERANCE = timedelta(minutes=5)
 
 
 class NotFoundError(LookupError):
@@ -284,6 +287,26 @@ def set_watch_active(session: Session, player: Player, active: bool) -> Watchlis
     entry.active = active
     session.flush()
     return entry
+
+
+def set_watch_interval(
+    session: Session, player: Player, interval_min: int | None
+) -> WatchlistEntry:
+    """Collect this card every `interval_min` minutes; None means every collector run."""
+    _require_positive("interval_min", interval_min)
+    entry = get_watch(session, player)
+    if entry is None:
+        raise NotFoundError(f"player {player.ea_id} is not on the watchlist")
+    entry.interval_min = interval_min
+    session.flush()
+    return entry
+
+
+def is_due(entry: WatchlistEntry, now: datetime, tolerance: timedelta = DUE_TOLERANCE) -> bool:
+    """Whether a watchlist card should be collected in the run at `now`."""
+    if entry.interval_min is None or entry.checked_at is None:
+        return True
+    return now - entry.checked_at >= timedelta(minutes=entry.interval_min) - tolerance
 
 
 def remove_watch(session: Session, player: Player) -> None:

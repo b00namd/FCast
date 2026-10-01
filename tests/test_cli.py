@@ -103,7 +103,8 @@ def test_collect_once_with_manual_csv(db_path: Path, monkeypatch: pytest.MonkeyP
     assert "0 new snapshots, 1 unchanged" in result.output
 
     # Player details from the CSV are now known.
-    assert "Kylian Mbappé (91)" in runner.invoke(app, ["watch", "list"]).output
+    listing = runner.invoke(app, ["watch", "list"], env={"COLUMNS": "200"}).output
+    assert "Kylian Mbappé (91)" in listing
 
 
 def test_collect_once_without_sources(db_path: Path) -> None:
@@ -346,3 +347,18 @@ def test_lage_command(db_path: Path) -> None:
     assert card["listings"] == [54_000, 59_500]
     assert card["cheapest_hour"] is not None  # more than 3 days of data
     assert data["mood"]["cards"] == 1
+
+
+def test_watch_interval_and_remove(db_path: Path) -> None:
+    runner.invoke(app, ["watch", "add", "231747", "--name", "Mbappé"])
+    result = runner.invoke(app, ["watch", "interval", "231747", "120"])
+    assert result.exit_code == 0, result.output
+    assert "2 h" in result.output
+    listing = runner.invoke(app, ["watch", "list"], env={"COLUMNS": "200"}).output
+    assert "2 h" in listing
+    assert "every run" in runner.invoke(app, ["watch", "interval", "231747", "0"]).output
+
+    assert runner.invoke(app, ["watch", "interval", "1", "60"]).exit_code == 1
+    result = runner.invoke(app, ["watch", "remove", "231747"])
+    assert result.exit_code == 0, result.output
+    assert "Watchlist is empty" in runner.invoke(app, ["watch", "list"]).output

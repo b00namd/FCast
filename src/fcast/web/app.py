@@ -37,6 +37,13 @@ def format_pct(value: float | None) -> str:
     return f"{value:+.1f} %".replace(".", ",")
 
 
+def format_interval(minutes: int | None) -> str:
+    """Collect interval of a watchlist card in German."""
+    if minutes is None:
+        return "jede Runde"
+    return f"alle {minutes // 60} h" if minutes % 60 == 0 else f"alle {minutes} min"
+
+
 def build_templates(settings: Settings) -> Jinja2Templates:
     templates = Jinja2Templates(directory=WEB_DIR / "templates")
     tz = settings.tz
@@ -51,6 +58,7 @@ def build_templates(settings: Settings) -> Jinja2Templates:
     templates.env.filters["coins"] = format_coins
     templates.env.filters["pct"] = format_pct
     templates.env.filters["dt"] = format_dt
+    templates.env.filters["interval"] = format_interval
     templates.env.filters["chem_group"] = chem_group
     templates.env.filters["chem_group_label"] = lambda name: GROUP_LABELS[chem_group(name)]
     templates.env.globals["version"] = __version__

@@ -157,7 +157,11 @@ def _row_context(session: Session, ea_id: int) -> dict[str, Any]:
     entry = repo.get_watch(session, player)
     if entry is None:
         raise HTTPException(status_code=404, detail="Nicht auf der Watchlist")
-    return {"entry": entry, "refs": repo.list_source_refs(session, player)}
+    return {
+        "entry": entry,
+        "refs": repo.list_source_refs(session, player),
+        "interval_choices": INTERVAL_CHOICES,
+    }
 
 
 class WatchInput:
@@ -192,6 +196,20 @@ class WatchInput:
         except ValueError:
             self.errors.append(f"{label}: ungültiger Betrag „{value}“")
             return None
+
+
+INTERVAL_CHOICES = ((None, "jede Runde"), (120, "alle 2 h"), (360, "alle 6 h"), (720, "alle 12 h"))
+
+
+def _interval(value: str | None, errors: list[str]) -> int | None:
+    """Form value of the collect interval: "0" = every run, otherwise one of the choices."""
+    if not value or value == "0":
+        return None
+    allowed = {str(minutes): minutes for minutes, _ in INTERVAL_CHOICES if minutes}
+    if value not in allowed:
+        errors.append(f"Ungültiger Takt „{value}“")
+        return None
+    return allowed[value]
 
 
 def _apply_watch(session: Session, player: Player, data: WatchInput, update_refs: bool) -> None:
@@ -379,9 +397,11 @@ async def watch_update(
     sell: OptionalFormStr = None,
     futbin_url: OptionalFormStr = None,
     note: OptionalFormStr = None,
+    interval: OptionalFormStr = None,
 ) -> HTMLResponse:
     data = WatchInput(name, buy, sell, futbin_url, note)
     errors = list(data.errors)
+    interval_min = _interval(interval, errors)
     info: PlayerInfo | None = None
     with _db(request) as session:
         current = repo.get_source_ref(session, ea_id, futbin.SOURCE_NAME)
@@ -394,6 +414,8 @@ async def watch_update(
         if info is not None:
             apply_player_info(session, info)
         _apply_watch(session, context["entry"].player, data, update_refs=True)
+        if interval is not None:
+            repo.set_watch_interval(session, context["entry"].player, interval_min)
         session.flush()
         return _render(request, "partials/watch_row.html", _row_context(session, ea_id))
 

@@ -7,7 +7,8 @@
     {% if entry.player.chem_styles or entry.player.chem_style %}<br>{{ chem_list(entry.player) }}{% endif %}</td>
   <td class="num">{{ entry.target_buy | coins }}</td>
   <td class="num">{{ entry.target_sell | coins }}</td>
-  <td class="hide-sm">{% if refs.futbin %}<a href="https://www.futbin.com{{ refs.futbin }}" target="_blank" rel="noreferrer">FUTBIN</a>{% else %}<span class="muted">FUTNext</span>{% endif %}</td>
+  <td class="hide-sm">{% if refs.futbin %}<a href="https://www.futbin.com{{ refs.futbin }}" target="_blank" rel="noreferrer">FUTBIN</a>{% else %}<span class="muted">FUTNext</span>{% endif %}
+    <br><small class="muted">{{ entry.interval_min | interval }}</small></td>
   <td class="hide-sm">{{ entry.note or "" }}</td>
   <td class="actions">
     <button class="secondary outline" hx-get="/watchlist/{{ entry.player.ea_id }}/edit"
