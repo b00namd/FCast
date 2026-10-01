@@ -4,6 +4,12 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Behoben
+- **Kauf-Dip bei neuen Karten:** Ein frisch erschienenes TOTW fällt in den ersten Stunden stark;
+  der „Ø 7 Tage“ bestand dann nur aus den Release-Preisen und löste falsche Kauf-Alerts aus
+  (z. B. Gyökeres bei 122.000, danach 86.000). `BUY_DIP` braucht jetzt mindestens 3 Tage
+  Preisverlauf (`WindowStats.span`).
+
 ### Marktlage auf Zuruf
 - CLI `fcast lage [--json]`: alles für eine Analyse in einem Rutsch – je Karte Preis, Alter,
   24-h-Änderung, Abstand zum Ø 7 Tage, Spanne, Angebote/Lücke/Luft, ÜV-Score, Holo-Abstand,

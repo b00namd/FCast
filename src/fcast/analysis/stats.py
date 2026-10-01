@@ -28,12 +28,15 @@ class WindowStats:
     low: int
     high: int
     stdev: float  # population standard deviation
+    span: timedelta = timedelta(0)  # time between the first and the last point in the window
 
 
 def window_stats(points: Sequence[Point], since: datetime) -> WindowStats | None:
-    prices = [price for at, price in points if at >= since]
-    if not prices:
+    window = [(at, price) for at, price in points if at >= since]
+    if not window:
         return None
+    prices = [price for _, price in window]
+    times = [at for at, _ in window]
     mean = statistics.fmean(prices)
     return WindowStats(
         count=len(prices),
@@ -43,6 +46,7 @@ def window_stats(points: Sequence[Point], since: datetime) -> WindowStats | None
         high=max(prices),
         # Float arithmetic; statistics.pstdev is exact but far too slow for backtests.
         stdev=math.sqrt(statistics.fmean([(p - mean) ** 2 for p in prices])),
+        span=max(times) - min(times),
     )
 
 

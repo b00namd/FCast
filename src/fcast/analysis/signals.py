@@ -5,7 +5,7 @@ the 5 % EA tax, plus human-readable reasons (German, shown in the dashboard and 
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 
 from fcast.analysis.market import headroom_pct, supply_gap_pct
@@ -19,6 +19,9 @@ from fcast.analysis.stats import PriceStats
 from fcast.config import Settings
 
 MIN_POINTS_DIP = 6  # a 7-day mean from fewer snapshots is not trustworthy
+# New cards (e.g. a fresh TOTW) fall for days after release; a "mean" over the first hours is
+# just the launch price, so a dip needs a few days of history.
+MIN_SPAN_DIP = timedelta(days=3)
 FULL_LISTINGS = 5  # FUTBIN shows at most five lowest BINs
 
 
@@ -105,6 +108,8 @@ def buy_dip(ea_id: int, name: str, stats: PriceStats, cfg: SignalConfig) -> Sign
     """Price clearly below the 7-day mean and selling at the mean pays off after tax."""
     week = stats.week
     if stats.current is None or week is None or week.count < MIN_POINTS_DIP:
+        return None
+    if week.span < MIN_SPAN_DIP:
         return None
     if stats.current > week.mean * (1 - cfg.dip_pct / 100):
         return None

@@ -151,6 +151,18 @@ def test_buy_dip_signal() -> None:
     assert signal.expected_profit == net_after_tax(9_900) - 8_000
 
 
+def test_no_buy_dip_for_a_fresh_card_falling_after_release() -> None:
+    # A new TOTW card: 229k at release, then falling every half hour. The "mean" of the first
+    # hours is just the launch price, not a reference for a dip.
+    launch = [229_000, 200_000, 180_000, 160_000, 140_000, 130_000, 120_000, 110_000, 100_000]
+    stats = price_stats(series(launch, timedelta(minutes=30)), NOW)
+    assert stats.week is not None and stats.week.count >= sig.MIN_POINTS_DIP
+    assert sig.buy_dip(1, "Son", stats, CFG) is None
+    # Same shape after three days of history is a real dip again.
+    history = series([120_000] * 72 + [100_000])
+    assert sig.buy_dip(1, "Son", price_stats(history, NOW), CFG) is not None
+
+
 def test_no_buy_dip_without_margin_after_tax() -> None:
     # 12 % below the mean (a real dip), but selling at the mean only earns ~20 coins after tax.
     stats = price_stats(series([1_000] * 160 + [880]), NOW)
