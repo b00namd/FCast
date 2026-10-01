@@ -18,6 +18,7 @@ from selectolax.parser import HTMLParser, Node
 from fcast.config import Platform
 from fcast.db.base import utcnow
 from fcast.sources.base import (
+    CardAttributes,
     ExtinctError,
     MarketInfo,
     PlayerInfo,
@@ -195,6 +196,62 @@ def parse_usage(html: str, platform: Platform) -> Usage:
     )
 
 
+_INFO_LABELS = {"skills", "weak foot", "height", "foot", "b.type"}
+_HEIGHT_RE = re.compile(r"(\d{3})\s*cm")
+
+
+def _info_values(tree: HTMLParser) -> dict[str, str]:
+    """The small "Skills / Weak Foot / Height / Foot / B.Type" rows of the info box."""
+    values: dict[str, str] = {}
+    for row in tree.css(".xxs-row.xs-font.align-center"):
+        label = row.css_first(".text-faded")
+        if label is None:
+            continue
+        key = label.text(strip=True).lower()
+        if key in _INFO_LABELS and key not in values:
+            texts = [node.text(strip=True) for node in row.iter()]
+            values[key] = next((t for t in texts if t and t.lower() != key), "")
+    return values
+
+
+def parse_attributes(html: str) -> CardAttributes | None:
+    """Stats, PlayStyles (+), skills, weak foot, height, body type and AcceleRATE of a card."""
+    tree = HTMLParser(html)
+    stats: dict[str, int] = {}
+    for row in tree.css(".player-stat-row"):
+        name = row.css_first(".player-stat-name")
+        value = row.css_first(".player-stat-value")
+        raw = value.attributes.get("data-stat-value") if value is not None else None
+        if name is not None and raw and raw.isdigit():
+            stats.setdefault(name.text(strip=True), int(raw))  # the first copy is the card
+    if not stats:
+        return None
+    playstyles: list[str] = []
+    plus: list[str] = []
+    box = tree.css_first(".player-abilities-wrapper")
+    for link in box.css("a.playStyle-table-icon") if box is not None else ():
+        label = link.css_first("div")
+        style = label.text(strip=True) if label is not None else ""
+        if style and style not in playstyles:
+            playstyles.append(style)
+            if "psplus" in (link.attributes.get("class") or "").split():
+                plus.append(style)
+    accelerate = tree.css_first("a.accelerate-bar[data-original]")
+    info = _info_values(tree)
+    height = _HEIGHT_RE.search(info.get("height", ""))
+    return CardAttributes(
+        stats=stats,
+        playstyles=tuple(playstyles),
+        playstyles_plus=tuple(plus),
+        skills=int(info["skills"]) if info.get("skills", "").isdigit() else None,
+        weak_foot=int(info["weak foot"]) if info.get("weak foot", "").isdigit() else None,
+        height_cm=int(height[1]) if height else None,
+        body_type=info.get("b.type") or None,
+        foot=info.get("foot") or None,
+        accelerate=accelerate.text(strip=True) or None if accelerate is not None else None,
+    )
+
+
 def parse_player(html: str, ea_id: int, platform: Platform | None = None) -> PlayerInfo:
     tree = HTMLParser(html)
     title = _meta(tree, "property", "og:title")
@@ -230,6 +287,7 @@ def parse_player(html: str, ea_id: int, platform: Platform | None = None) -> Pla
         league=_link_text(tree, "league"),
         nation=_link_text(tree, "nation"),
         club=_link_text(tree, "club"),
+        attributes=parse_attributes(html),
     )
 
 

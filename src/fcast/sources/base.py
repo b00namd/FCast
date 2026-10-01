@@ -1,10 +1,49 @@
 """Price source interface and shared data types."""
 
+import json
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 from fcast.config import Platform
+
+
+@dataclass(frozen=True)
+class CardAttributes:
+    """In-game attributes of a card as FUTBIN shows them (English stat names)."""
+
+    stats: dict[str, int] = field(default_factory=dict)  # face stats and detailed stats
+    playstyles: tuple[str, ...] = ()  # all PlayStyles, including the PlayStyle+ ones
+    playstyles_plus: tuple[str, ...] = ()
+    skills: int | None = None
+    weak_foot: int | None = None
+    height_cm: int | None = None
+    body_type: str | None = None
+    foot: str | None = None
+    accelerate: str | None = None  # Explosive, Controlled or Lengthy (without chem style)
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), ensure_ascii=False, sort_keys=True)
+
+    @classmethod
+    def from_json(cls, raw: str | None) -> "CardAttributes | None":
+        if not raw:
+            return None
+        try:
+            data = json.loads(raw)
+            return cls(
+                stats={str(k): int(v) for k, v in data.get("stats", {}).items()},
+                playstyles=tuple(data.get("playstyles", ())),
+                playstyles_plus=tuple(data.get("playstyles_plus", ())),
+                skills=data.get("skills"),
+                weak_foot=data.get("weak_foot"),
+                height_cm=data.get("height_cm"),
+                body_type=data.get("body_type"),
+                foot=data.get("foot"),
+                accelerate=data.get("accelerate"),
+            )
+        except (ValueError, TypeError, AttributeError):
+            return None
 
 
 class SourceError(Exception):
@@ -73,6 +112,7 @@ class PlayerInfo:
     chem_styles: str | None = None  # top 3 as "Hunter:77|Artist:8|Engine:8"
     games_used: int | None = None
     goals_per_game: float | None = None
+    attributes: CardAttributes | None = None  # stats, PlayStyles, AcceleRATE (FUTBIN only)
 
 
 class PriceSource(ABC):

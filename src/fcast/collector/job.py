@@ -69,6 +69,7 @@ def apply_player_info(session: Session, info: PlayerInfo) -> Player:
             chem_styles_raw=info.chem_styles,
             games_used=info.games_used,
             goals_per_game=info.goals_per_game,
+            attributes_raw=info.attributes.to_json() if info.attributes else None,
         ),
     )
 

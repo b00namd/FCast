@@ -65,6 +65,7 @@ class PlayerDetails:
     chem_styles_raw: str | None = None
     games_used: int | None = None
     goals_per_game: float | None = None
+    attributes_raw: str | None = None
 
 
 def get_player_by_ea_id(session: Session, ea_id: int) -> Player | None:

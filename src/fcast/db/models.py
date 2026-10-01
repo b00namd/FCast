@@ -3,11 +3,12 @@
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from fcast.config import Platform
 from fcast.db.base import Base, UTCDateTime, str_enum, utcnow
+from fcast.sources.base import CardAttributes
 
 
 def parse_chem_styles(raw: str | None) -> list[tuple[str, int]]:
@@ -53,6 +54,8 @@ class Player(Base):
     chem_styles_raw: Mapped[str | None] = mapped_column("chem_styles", String(120))
     games_used: Mapped[int | None]
     goals_per_game: Mapped[float | None]
+    # In-game attributes (stats, PlayStyles, AcceleRATE) as JSON, see CardAttributes.
+    attributes_raw: Mapped[str | None] = mapped_column("attributes", Text)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
     watchlist_entry: Mapped["WatchlistEntry | None"] = relationship(
@@ -62,6 +65,10 @@ class Player(Base):
     @property
     def chem_styles(self) -> list[tuple[str, int]]:
         return parse_chem_styles(self.chem_styles_raw)
+
+    @property
+    def attributes(self) -> CardAttributes | None:
+        return CardAttributes.from_json(self.attributes_raw)
 
     @property
     def display_name(self) -> str:
