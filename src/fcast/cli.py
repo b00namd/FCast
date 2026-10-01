@@ -548,7 +548,7 @@ def _day(value: str | None, option: str) -> date | None:
 @app.command()
 def backtest(
     rule: Annotated[
-        str, typer.Option("--rule", help="BUY_DIP, OVERPRICE_CHANCE or PROMO_PREBUY.")
+        str, typer.Option("--rule", help="BUY_DIP, OVERPRICE_CHANCE, TREND_START or PROMO_PREBUY.")
     ] = "BUY_DIP",
     first: Annotated[
         str | None, typer.Option("--from", help="First day (YYYY-MM-DD); default 30 days ago.")

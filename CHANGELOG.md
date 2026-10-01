@@ -4,6 +4,24 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Phase 10 – Potenzial-Radar
+- **Markt-Scanner:** liest alle 12 h FUTBIN Popular, New Players und das aktuelle TOTW
+  (je bis `FCAST_RADAR_LIST_LIMIT` = 150 Karten), löst pro Lauf bis zu 5 neue Karten auf und
+  bepreist bis zu `FCAST_RADAR_PER_RUN` = 15 Radar-Karten (je Karte etwa alle 6 h) – ohne sie auf
+  die Watchlist zu setzen. `FCAST_RADAR_PER_RUN=0` schaltet den Scanner ab.
+- **Verlauf der Spielzahl** (FUTBIN „Games“) für alle bepreisten Karten.
+- **Futter-Index:** alle 6 h der Ø der drei günstigsten Karten je Rating 82–90 (FUTBIN
+  „Cheapest Players“).
+- **Frühsignale:** Trend-Start (stetiger Anstieg ≥ 5 % in 12 h, noch kein Sprung über 30 %),
+  Angebot schrumpft (z. B. 5 → 2 Angebote in 24 h bei haltendem Preis), Nutzung steigt
+  (Spiele/Tag mindestens 1,5-mal so viele wie am Vortag und über dem Schnitt), Futter zieht an
+  (+8 % in 24 h). Potenzial = stärkstes Signal + 5 je weiterem.
+- **Seite „Radar“** mit Treffern, Begründung, „Beobachten“-Knopf und Futter-Index; Push ab
+  Potenzial 70 (höchstens einmal am Tag pro Karte/Rating, unter Alerts abschaltbar);
+  Abschnitte „Radar“ und „Futter-Index“ in `fcast lage`.
+- **Backtest:** neue Regel Trend-Start (`--rule TREND_START`, Sweep z. B. `trend_target_pct`).
+- Portfolio/Verkaufs-Tracking zurückgestellt (Backlog).
+
 ### Phase 9 – Betrieb & bessere Signale
 - **Abfrage-Takt pro Karte:** jede Runde, alle 2/6/12 h (Watchlist „Bearbeiten“ oder
   `fcast watch interval <ea_id> <minuten>`); der Collector überspringt Karten, die noch nicht dran

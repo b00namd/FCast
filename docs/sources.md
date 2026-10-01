@@ -65,6 +65,22 @@ Erst danach wird der jeweilige Adapter gebaut – mit den Auflagen als Konfigura
 
 `ManualSource` (CSV, `FCAST_MANUAL_CSV`) – siehe Modul-Docstring in `src/fcast/sources/manual.py`.
 
+## FUTBIN-Listen für das Potenzial-Radar (Stand 01.10.2026)
+
+Alle ohne Query-String (robots.txt verbietet `/*?*`), über denselben höflichen Client:
+
+| Seite | Inhalt | Abruf |
+|---|---|---|
+| `/27/popular` | ~250 meistgesuchte Karten | alle 12 h (Radar-Bestand) |
+| `/27/latest` | 100 neueste Karten | alle 12 h |
+| `/27/totw/TOTW<n>` | aktuelles TOTW | alle 12 h |
+| `/27/squad-building-challenges/cheapest` | je Rating 81–99 die 12 günstigsten Karten, PC und Konsole getrennt | alle 6 h (Futter-Index) |
+| Spielerseiten | Preis, Angebote, Spielzahl | Radar-Karten etwa alle 6 h, höchstens `FCAST_RADAR_PER_RUN` pro Lauf |
+
+Nicht genutzt: `/27/pgp` (Spielstatistik) – nur Seite 1 nach Rating ist ohne Query-String
+erreichbar, Sortierung nach Spielen (`?sort=games_pc`) und Blättern (`?page=`) sind gesperrt.
+Die Spielzahl je Karte steht aber auf jeder Spielerseite und wird von dort gelesen.
+
 ## Spieldaten für die TOTW-Prognose (Stand 30.09.2026)
 
 | Quelle | Status | Grund |

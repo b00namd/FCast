@@ -144,7 +144,10 @@ Einstellungen, Verlauf und Test-Push; CLI `fcast alert test|check`.
 
 ---
 
-## Phase 10 – Potenzial-Radar
+## ✅ Phase 10 – Potenzial-Radar (erledigt)
+> **Stand 01.10.2026:** Scanner, Futter-Index, vier Frühsignale, Seite „Radar“, Push, `fcast lage`
+> und Trend-Start im Backtest. „Nutzung steigt“ braucht zwei Tage Spielzahlen, der Futter-Index
+> einen Tag – bis dahin zeigt das Radar vor allem Trend-Start und „Angebot schrumpft“.
 Ziel: Chancen erkennen, bevor sie offensichtlich sind – auch bei Karten, die nicht auf der Watchlist
 stehen. (Portfolio/Verkaufs-Tracking hat der Nutzer bewusst zurückgestellt, siehe Backlog.)
 

@@ -26,6 +26,7 @@ from fcast.analysis.pricing import net_after_tax, round_to_price_step, step_pric
 from fcast.analysis.stats import WEEK, Point, PriceStats, price_stats
 from fcast.config import Settings
 from fcast.promos.scoring import CardInfo, PromoInfo, PromoWeights, is_prebuy, score_card
+from fcast.radar import signals as rs
 
 MAX_QUOTE_AGE = timedelta(hours=12)  # a price older than this is no longer "the" price
 SUPPLY_MAX_AGE = timedelta(hours=2)  # supply observed this long before a snapshot still counts
@@ -81,6 +82,9 @@ class Params:
     # OVERPRICE_CHANCE
     uev_threshold: float = 60.0
     outlier_gap_pct: float = 15.0
+    # TREND_START (radar)
+    trend_min_pct: float = 5.0
+    trend_target_pct: float = 10.0  # sell once the price is this much above the buy price
     # PROMO_PREBUY
     threshold: float = 45.0
     entry_days: float = 3.0  # buy this many days before the promo starts (2-7)
@@ -94,6 +98,7 @@ class Params:
             min_profit=settings.min_profit,
             uev_threshold=settings.uev_threshold,
             outlier_gap_pct=settings.outlier_gap_pct,
+            trend_min_pct=settings.radar_trend_min_pct,
             threshold=settings.promo_prebuy_threshold,
         )
 
@@ -106,6 +111,7 @@ class Params:
 SWEEPABLE: dict[sig.Rule, tuple[str, ...]] = {
     sig.Rule.BUY_DIP: ("dip_pct", "min_margin_pct", "max_hold_h", "stop_loss_pct"),
     sig.Rule.OVERPRICE_CHANCE: ("uev_threshold", "min_margin_pct", "max_hold_h", "stop_loss_pct"),
+    sig.Rule.TREND_START: ("trend_min_pct", "trend_target_pct", "max_hold_h", "stop_loss_pct"),
     sig.Rule.PROMO_PREBUY: ("threshold", "entry_days", "exit_h"),
 }
 SUPPORTED = tuple(SWEEPABLE)
@@ -293,6 +299,34 @@ def simulate_uev(
                 continue
             note = f"ÜV-Score {signal.score:.0f}, {len(supply.listings)} Angebote"
             trade, exit_index = _close(card, index, signal.recommended, params, end, note)
+            trades.append(trade)
+            free_from = exit_index + 1
+    return sorted(trades, key=lambda t: (t.bought_at, t.ea_id))
+
+
+# --- TREND_START (radar) ------------------------------------------------------------------
+
+
+def simulate_trend(
+    series: Sequence[CardSeries], params: Params, start: datetime, end: datetime
+) -> list[Trade]:
+    """Trend-Start: buy when a steady rise begins, sell `trend_target_pct` higher or later."""
+    cfg = rs.RadarConfig(trend_min_pct=params.trend_min_pct)
+    window = timedelta(hours=cfg.trend_window_h)
+    trades: list[Trade] = []
+    for card in series:
+        times = [t for t, _ in card.points]
+        free_from = 0
+        for index, (at, price) in enumerate(card.points):
+            if index < free_from or not start <= at <= end:
+                continue
+            lo = bisect_left(times, at - window)
+            signal = rs.trend_start(card.points[lo : index + 1], at, cfg)
+            if signal is None:
+                continue
+            target = round_to_price_step(price * (1 + params.trend_target_pct / 100), "up")
+            note = signal.reasons[0]
+            trade, exit_index = _close(card, index, target, params, end, note)
             trades.append(trade)
             free_from = exit_index + 1
     return sorted(trades, key=lambda t: (t.bought_at, t.ea_id))

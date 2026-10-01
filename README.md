@@ -32,6 +32,9 @@ Das Verzeichnis muss dem Container-Benutzer gehören (einmalig, ohne sudo):
 `docker run --rm -v ./backups:/b alpine chown $(docker compose exec fcast id -u):$(docker compose exec fcast id -g) /b`.
 Wiederherstellen: Container stoppen, Backup als `fcast.db` ins Volume kopieren, starten.
 
+Potenzial-Radar: Dashboard „Radar“ – Frühsignale auch für Karten außerhalb der Watchlist
+(Scanner über FUTBIN-Listen, Last über `FCAST_RADAR_PER_RUN`).
+
 Marktlage auf einen Blick: `docker compose exec fcast fcast lage` (oder `--json`).
 
 Backtest (Regel auf den gespeicherten Preisen nachspielen):

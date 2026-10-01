@@ -190,6 +190,11 @@ def run_backtest(
         def run(p: engine.Params) -> list[engine.Trade]:
             return engine.simulate_dip(series, cache, p, end)
 
+    elif rule is sig.Rule.TREND_START:
+
+        def run(p: engine.Params) -> list[engine.Trade]:
+            return engine.simulate_trend(series, p, start, end)
+
     elif rule is sig.Rule.OVERPRICE_CHANCE:
         cache = _dip_stats(series, start, end)  # same statistics, only the rule differs
 

@@ -384,3 +384,56 @@ def test_uev_backtest_from_database(factory: sessionmaker[Session]) -> None:
         report = bt.run_backtest(session, settings(), Rule.OVERPRICE_CHANCE, T0, end)
     assert [(t.buy, t.sell, t.exit) for t in report.trades] == [(100_000, 111_000, Exit.TARGET)]
     assert report.metrics.total_profit == 5_450
+
+
+# --- TREND_START (radar) ----------------------------------------------------------------------
+
+
+def trend_card() -> CardSeries:
+    # Flat for 12 h, then a steady rise; the signal fires at 21,000 (+5 % in 12 h).
+    return card(
+        hourly((12, 20_000), (1, 20_250), (1, 20_500), (1, 20_750), (1, 21_000))
+        + hourly((1, 21_500), (1, 22_500), (1, 23_500), start=T0 + 16 * HOUR)
+    )
+
+
+def test_trend_start_buys_the_rise_and_sells_at_the_target() -> None:
+    series = [trend_card()]
+    trades = engine.simulate_trend(series, DEFAULT, T0, series[0].points[-1][0])
+    assert len(trades) == 1
+    trade = trades[0]
+    assert (trade.bought_at, trade.buy) == (T0 + 15 * HOUR, 21_000)
+    assert trade.sell == 23_250  # +10 % rounded up to a valid price
+    assert trade.exit is Exit.TARGET
+    assert trade.sold_at == T0 + 18 * HOUR
+    assert trade.profit == 22_087 - 21_000
+    assert "+5,0 % in 12 h" in trade.note
+
+
+def test_trend_start_target_sweep() -> None:
+    series = [trend_card()]
+    end = series[0].points[-1][0]
+    rows = engine.sweep(
+        lambda p: engine.simulate_trend(series, p, T0, end),
+        DEFAULT,
+        "trend_target_pct",
+        [10, 20],
+    )
+    assert [(r.value, r.metrics.trades, r.metrics.open) for r in rows] == [(10, 1, 0), (20, 0, 1)]
+
+
+def test_trend_start_backtest_from_database(factory: sessionmaker[Session]) -> None:
+    series = trend_card()
+    with factory.begin() as session:
+        store(session, 1, series.points)
+        report = bt.run_backtest(
+            session,
+            settings(),
+            Rule.TREND_START,
+            T0,
+            series.points[-1][0],
+            sweep_name="trend_target_pct",
+            sweep_values=[5, 10],
+        )
+    assert report.metrics.total_profit == 1_087
+    assert [r.metrics.trades for r in report.sweep] == [1, 1]

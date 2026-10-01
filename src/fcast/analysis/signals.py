@@ -33,6 +33,7 @@ class Rule(StrEnum):
     OVERPRICE_CHANCE = "OVERPRICE_CHANCE"
     PROMO_PREBUY = "PROMO_PREBUY"
     HOLO_SPREAD = "HOLO_SPREAD"
+    TREND_START = "TREND_START"  # radar signal, used by the backtest
 
 
 RULE_LABELS = {
@@ -41,6 +42,7 @@ RULE_LABELS = {
     Rule.OVERPRICE_CHANCE: "ÜV-Chance",
     Rule.PROMO_PREBUY: "Promo-Vorkauf",
     Rule.HOLO_SPREAD: "Holo-ÜV",
+    Rule.TREND_START: "Trend-Start",
 }
 
 
