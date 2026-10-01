@@ -1,12 +1,13 @@
 """Card values across all known cards: play value, real usage and the price they usually cost.
 
 The "meta score" is the play value confirmed by usage (how much the card is played compared
-with the other known cards). A log-linear fit of price over meta score tells what a card of a
-given quality usually costs; cards far below that are "undervalued".
+with the other known cards). For base cards (gold, silver, bronze) a log-linear fit of price
+over meta score and rating tells what a card of that quality and rating usually costs; cards
+far below that are "undervalued". Special cards and holo versions are a market of their own
+and are not compared.
 """
 
 import math
-import statistics
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -22,6 +23,16 @@ from fcast.radar.signals import usage_rates
 RECENT = timedelta(days=3)
 MIN_FIT_PRICE = 2_000  # cheaper cards sit at the market floor; their price says nothing
 MIN_FIT_CARDS = 15
+MIN_RATE_PAIRS = 8
+BASE_TYPES = ("gold", "silver", "bronze")
+
+
+def is_base_card(card_type: str | None) -> bool:
+    return (card_type or "").lower().startswith(BASE_TYPES)
+
+
+def is_holo(card_type: str | None) -> bool:
+    return (card_type or "").endswith("(Holo)")
 
 
 @dataclass(frozen=True)
@@ -31,13 +42,17 @@ class CardValue:
     meta: float
     price: int | None
     usage_rate: float | None  # games per day (last 24 h)
-    games: int | None  # FUTBIN games counter
+    games: int | None  # FUTBIN games counter since the card's release
+    rating: int | None = None
+    base_card: bool = False  # gold/silver/bronze base card
 
 
 def card_values(session: Session, settings: Settings, now: datetime) -> dict[int, CardValue]:
-    """Play value, usage and price of every card with known attributes."""
-    found: dict[int, tuple[pv.PlayValue, int | None, float | None, int | None]] = {}
+    """Play value, usage and price of every card with known attributes (holo versions excluded)."""
+    found: dict[int, tuple[pv.PlayValue, int | None, float | None, Player]] = {}
     for player in session.scalars(select(Player).where(Player.attributes_raw.is_not(None))):
+        if is_holo(player.card_type):
+            continue  # same stats as the normal card, priced and played differently
         play = pv.play_value(player.attributes, player.position)
         if play is None:
             continue
@@ -45,47 +60,98 @@ def card_values(session: Session, settings: Settings, now: datetime) -> dict[int
         price = last.price if last is not None and now - last.captured_at <= RECENT else None
         usage = [(u.observed_at, u.games) for u in repo.list_usage(session, player, now - RECENT)]
         rate, _ = usage_rates(usage, now, 24)
-        found[player.id] = (play, price, rate, player.games_used)
+        found[player.id] = (play, price, rate, player)
     ranks = pv.percentiles(
         {pid: rate for pid, (_, _, rate, _) in found.items() if rate is not None}
     )
     return {
-        pid: CardValue(pid, play, pv.meta_score(play.score, ranks.get(pid)), price, rate, games)
-        for pid, (play, price, rate, games) in found.items()
+        pid: CardValue(
+            pid,
+            play,
+            pv.meta_score(play.score, ranks.get(pid)),
+            price,
+            rate,
+            player.games_used,
+            player.rating,
+            is_base_card(player.card_type),
+        )
+        for pid, (play, price, rate, player) in found.items()
     }
 
 
 @dataclass(frozen=True)
 class PriceFit:
+    """log(price) = intercept + meta_slope * meta + rating_slope * rating (base cards)."""
+
     intercept: float
-    slope: float  # change of log(price) per meta point
+    meta_slope: float
+    rating_slope: float
     cards: int
 
-    def expected(self, meta: float) -> int:
-        return round(math.exp(self.intercept + self.slope * meta))
+    def expected(self, meta: float, rating: int) -> int:
+        return round(math.exp(self.intercept + self.meta_slope * meta + self.rating_slope * rating))
+
+
+def _solve3(a: list[list[float]], b: list[float]) -> list[float] | None:
+    """Solve a 3x3 linear system (Gaussian elimination); None if singular."""
+    m = [[*row, value] for row, value in zip(a, b, strict=True)]
+    for col in range(3):
+        pivot = max(range(col, 3), key=lambda r: abs(m[r][col]))
+        if abs(m[pivot][col]) < 1e-9:
+            return None
+        m[col], m[pivot] = m[pivot], m[col]
+        for row in range(3):
+            if row != col:
+                factor = m[row][col] / m[col][col]
+                m[row] = [x - factor * y for x, y in zip(m[row], m[col], strict=True)]
+    return [m[i][3] / m[i][i] for i in range(3)]
 
 
 def price_fit(values: dict[int, CardValue]) -> PriceFit | None:
-    """What cards of a given meta score usually cost (log-linear least squares)."""
-    pairs = [
-        (v.meta, math.log(v.price))
+    """What base cards of a given meta score and rating usually cost (least squares)."""
+    rows = [
+        (v.meta, float(v.rating), math.log(v.price))
         for v in values.values()
-        if v.price is not None and v.price >= MIN_FIT_PRICE
+        if v.base_card and v.rating and v.price is not None and v.price >= MIN_FIT_PRICE
     ]
-    if len(pairs) < MIN_FIT_CARDS:
+    if len(rows) < MIN_FIT_CARDS:
         return None
-    try:
-        slope, intercept = statistics.linear_regression(
-            [m for m, _ in pairs], [p for _, p in pairs]
-        )
-    except statistics.StatisticsError:
-        return None
-    if slope <= 0:
+    xtx = [[0.0] * 3 for _ in range(3)]
+    xty = [0.0] * 3
+    for meta, rating, log_price in rows:
+        x = (1.0, meta, rating)
+        for i in range(3):
+            xty[i] += x[i] * log_price
+            for j in range(3):
+                xtx[i][j] += x[i] * x[j]
+    beta = _solve3(xtx, xty)
+    if beta is None or beta[1] <= 0:
         return None  # better cards are not more expensive: the fit says nothing
-    return PriceFit(intercept, slope, len(pairs))
+    return PriceFit(beta[0], beta[1], beta[2], len(rows))
 
 
-def agreement(values: dict[int, CardValue]) -> tuple[float | None, int]:
-    """How well the play value agrees with how much cards are played (Spearman, cards)."""
-    pairs = [(v.play.score, float(v.games)) for v in values.values() if v.games]
-    return pv.usage_agreement(pairs), len(pairs)
+def expected_price(fit: PriceFit | None, value: CardValue) -> int | None:
+    if fit is None or not value.base_card or not value.rating:
+        return None
+    return fit.expected(value.meta, value.rating)
+
+
+@dataclass(frozen=True)
+class Agreement:
+    correlation: float | None
+    cards: int
+    basis: str  # what the play value was compared with
+
+
+def agreement(values: dict[int, CardValue]) -> Agreement:
+    """How well the play value agrees with real usage (Spearman rank correlation).
+
+    Games per day are comparable across cards; the total games counter only among base cards
+    (special cards are younger and have had less time to be played).
+    """
+    rates = [(v.play.score, v.usage_rate) for v in values.values() if v.usage_rate]
+    if len(rates) >= MIN_RATE_PAIRS:
+        pairs = [(p, float(r)) for p, r in rates if r is not None]
+        return Agreement(pv.usage_agreement(pairs), len(pairs), "Spiele pro Tag")
+    games = [(v.play.score, float(v.games)) for v in values.values() if v.games and v.base_card]
+    return Agreement(pv.usage_agreement(games), len(games), "Spiele gesamt (nur Goldkarten)")

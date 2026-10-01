@@ -12,14 +12,16 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   Außen-/Innenverteidiger, Torwart): bis 80 Punkte aus gewichteten Werten, bis 20 aus passenden
   PlayStyle+, Skills/schwachem Fuß, AcceleRATE Explosive (Angreifer) und Größe (Innenverteidiger).
 - **Meta-Score:** 80 % Spielwert + 20 % wie viel die Karte im Vergleich gespielt wird.
-- **Neues Radar-Signal „Unterbewertet“:** Spielwert ab 65 und mindestens 40 % unter dem Preis,
-  den ähnlich starke Karten üblicherweise kosten (log-lineare Preiskurve über alle bekannten
-  Karten ab 2.000 Coins).
+- **Neues Radar-Signal „Unterbewertet“:** Goldkarte mit Spielwert ab 65 und mindestens 40 % unter
+  dem Preis, den Goldkarten mit ähnlichem Spielwert und Rating üblicherweise kosten (log-lineare
+  Preiskurve über Meta-Score und Rating, Karten ab 2.000 Coins). Spezialkarten und Holo-Versionen
+  sind eigene Märkte und werden nicht verglichen.
 - **Im Scoring:** ÜV-Score (Gewicht `FCAST_UEV_WEIGHT_META` = 0,10), Promo-Vorkauf
   (Faktor 0,8–1,2), Radar-Potenzial (bis +5) und Warnung beim Kauf-Dip unter Spielwert 40.
 - **Anzeige:** Abschnitt „Kartenbewertung“ im Spielerdetail, Spalte in Übersicht und Radar,
   `fcast lage`; neuer Befehl `fcast cards` mit Abgleich Spielwert ↔ Spielzahl
-  (Rangkorrelation).
+  (Rangkorrelation; Spiele pro Tag, solange die fehlen nur Goldkarten mit Spielen gesamt –
+  neue Spezialkarten hatten weniger Zeit, gespielt zu werden).
 
 ### Phase 10 – Potenzial-Radar
 - **Markt-Scanner:** liest alle 12 h FUTBIN Popular, New Players und das aktuelle TOTW

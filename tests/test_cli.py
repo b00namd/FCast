@@ -392,3 +392,4 @@ def test_cards_command(db_path: Path) -> None:
     assert "Stürmer (85)" in result.output
     assert "Sturm" in result.output
     assert "Zu wenige Karten mit Spielzahl" in result.output
+    assert "Goldkarten für die übliche Preiskurve" in result.output

@@ -205,13 +205,15 @@ def test_price_fit_finds_what_quality_usually_costs(factory: sessionmaker[Sessio
                 repo.PlayerDetails(
                     name=f"P{i}",
                     position="ST",
+                    rating=84 + i % 3,
+                    card_type="Gold Rare",
                     attributes_raw=CardAttributes(stats=stats).to_json(),
                     games_used=1_000 * (i + 1),
                 ),
             )
             value = pv.play_value(CardAttributes(stats=stats), "ST")
             assert value is not None
-            price = round(5_000 * 2 ** ((value.score - 30) / 10))
+            price = round(5_000 * 2 ** ((value.score - 30) / 10) * 1.1 ** (i % 3))
             if i == 18:
                 price = 3_000  # the bargain
             repo.add_snapshot(session, player, Platform.PC, price, "futbin", NOW)
@@ -219,8 +221,30 @@ def test_price_fit_finds_what_quality_usually_costs(factory: sessionmaker[Sessio
     fit = cards.price_fit(values)
     assert fit is not None and fit.cards == 20
     bargain = next(v for v in values.values() if v.price == 3_000)
-    expected = fit.expected(bargain.meta)
-    assert expected > 20_000
+    expected = cards.expected_price(fit, bargain)
+    assert expected is not None and expected > 20_000
     assert rs.undervalued(bargain.meta, bargain.price, expected, rs.RadarConfig()) is not None
-    corr, rated = cards.agreement(values)
-    assert rated == 20 and corr == pytest.approx(1.0)
+    check = cards.agreement(values)
+    assert (check.cards, check.basis) == (20, "Spiele gesamt (nur Goldkarten)")
+    assert check.correlation == pytest.approx(1.0)
+
+
+def test_special_and_holo_cards_are_not_compared(factory: sessionmaker[Session]) -> None:
+    stats = {name: 85 for name in pv.WEIGHTS[pv.STRIKER]}
+    raw = CardAttributes(stats=stats).to_json()
+    with factory.begin() as session:
+        for ea_id, card_type in ((1, "Team of the Week"), (2, "Team of the Week (Holo)")):
+            player = repo.upsert_player(
+                session,
+                ea_id,
+                repo.PlayerDetails(
+                    name="X", position="ST", rating=88, card_type=card_type, attributes_raw=raw
+                ),
+            )
+            repo.add_snapshot(session, player, Platform.PC, 500_000, "futbin", NOW)
+        values = cards.card_values(session, settings(), NOW)
+    assert len(values) == 1  # the holo version is left out
+    (value,) = values.values()
+    assert not value.base_card
+    fit = cards.PriceFit(0.0, 0.1, 0.0, 20)
+    assert cards.expected_price(fit, value) is None  # special cards are a market of their own

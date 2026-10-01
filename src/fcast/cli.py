@@ -779,7 +779,7 @@ def cards(
     ] = None,
 ) -> None:
     """Play value of all known cards, the usual price for it and the check against usage."""
-    from fcast.analysis.cards import agreement, card_values, price_fit
+    from fcast.analysis.cards import agreement, card_values, expected_price, price_fit
     from fcast.db.base import utcnow
     from fcast.db.models import Player
 
@@ -788,7 +788,7 @@ def cards(
         values = card_values(session, settings, utcnow())
         names = {p.id: p.display_name for p in session.query(Player).filter(Player.id.in_(values))}
     fit = price_fit(values)
-    corr, rated = agreement(values)
+    check = agreement(values)
     rows = sorted(
         (v for v in values.values() if group is None or v.play.group == group),
         key=lambda v: -v.meta,
@@ -797,7 +797,7 @@ def cards(
     for column in ("Karte", "Gruppe", "Spielwert", "Meta", "Preis", "Üblich", "Spiele"):
         table.add_column(column, justify="left" if column in ("Karte", "Gruppe") else "right")
     for v in rows:
-        usual = fit.expected(v.meta) if fit is not None else None
+        usual = expected_price(fit, v)
         table.add_row(
             names.get(v.player_id, str(v.player_id)),
             v.play.group,
@@ -808,15 +808,16 @@ def cards(
             format_coins(v.games),
         )
     console.print(table)
-    if corr is None:
-        typer.echo(f"Zu wenige Karten mit Spielzahl für den Abgleich ({rated}).")
+    if check.correlation is None:
+        typer.echo(f"Zu wenige Karten mit Spielzahl für den Abgleich ({check.cards}).")
     else:
+        corr = f"{check.correlation:+.2f}".replace(".", ",")
         typer.echo(
-            f"Spielwert vs. Spielzahl (Rangkorrelation): {corr:+.2f} bei {rated} Karten "
-            "(+1 = passt perfekt, 0 = kein Zusammenhang)".replace(".", ",")
+            f"Spielwert ↔ {check.basis}: Rangkorrelation {corr} bei {check.cards} Karten "
+            "(+1 = passt perfekt, 0 = kein Zusammenhang)"
         )
     if fit is None:
-        typer.echo("Noch zu wenige bepreiste Karten für den Preisvergleich.")
+        typer.echo("Noch zu wenige bepreiste Goldkarten für die übliche Preiskurve.")
 
 
 alert_app = typer.Typer(help="Push alerts.", no_args_is_help=True)

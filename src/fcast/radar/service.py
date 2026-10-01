@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from fcast.analysis.cards import CardValue, card_values, price_fit
+from fcast.analysis.cards import CardValue, card_values, expected_price, price_fit
 from fcast.analysis.stats import Point
 from fcast.collector.job import apply_player_info
 from fcast.config import Settings
@@ -271,7 +271,7 @@ def hits(session: Session, settings: Settings, now: datetime) -> list[RadarHit]:
         ]
         current, previous = usage[player.id]
         value = values.get(player.id)
-        expected = fit.expected(value.meta) if fit is not None and value is not None else None
+        expected = expected_price(fit, value) if value is not None else None
         signals = [
             s
             for s in (
