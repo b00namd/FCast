@@ -26,6 +26,8 @@ unterwegs ein VPN nutzen.
 Nützliche Befehle im Container: `docker compose exec fcast fcast sources status`,
 `docker compose exec fcast fcast collect --once`.
 
+Marktlage auf einen Blick: `docker compose exec fcast fcast lage` (oder `--json`).
+
 Backtest (Regel auf den gespeicherten Preisen nachspielen):
 `docker compose exec fcast fcast backtest --rule BUY_DIP --from 2026-10-01 --sweep dip_pct=5,10,15,20 --curves`
 – oder im Dashboard unter „Backtest“.

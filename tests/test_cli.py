@@ -306,3 +306,43 @@ def test_backtest_command(db_path: Path) -> None:
     assert result.exit_code != 0
     result = runner.invoke(app, ["backtest", "--sweep", "threshold=1,2"])
     assert result.exit_code != 0
+
+
+def test_lage_command(db_path: Path) -> None:
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    from fcast.db import repositories as repo
+    from fcast.db.session import create_db_engine, create_session_factory
+
+    assert runner.invoke(app, ["db", "upgrade"]).exit_code == 0
+    engine = create_db_engine(get_settings().db_url)
+    now = datetime.now(UTC)
+    platform = get_settings().platform
+    with create_session_factory(engine).begin() as session:
+        player = repo.upsert_player(session, 7, repo.PlayerDetails(name="Doku", rating=84))
+        repo.set_watch(session, player, note="ÜV Gold")
+        for hours in range(100, 0, -1):
+            at = now - timedelta(hours=hours)
+            repo.add_snapshot(session, player, platform, 60_000, "futbin", at)
+        repo.add_snapshot(session, player, platform, 54_000, "futbin", now)
+        repo.record_market_state(
+            session, player, platform, "futbin", now, (54_000, 59_500), 10_000, 150_000
+        )
+    engine.dispose()
+
+    result = runner.invoke(app, ["lage"])
+    assert result.exit_code == 0, result.output
+    assert "Marktlage" in result.output
+    assert "Doku (84)" in result.output
+    assert "Kauf-Dip" in result.output  # 10 % under the 7-day mean
+    assert "Backtest" in result.output
+
+    result = runner.invoke(app, ["lage", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    card = data["cards"][0]
+    assert (card["name"], card["price"], card["note"]) == ("Doku (84)", 54_000, "ÜV Gold")
+    assert card["listings"] == [54_000, 59_500]
+    assert card["cheapest_hour"] is not None  # more than 3 days of data
+    assert data["mood"]["cards"] == 1

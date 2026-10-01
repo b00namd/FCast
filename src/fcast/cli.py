@@ -614,6 +614,89 @@ def backtest(
             )
 
 
+@app.command()
+def lage(
+    as_json: Annotated[bool, typer.Option("--json", help="Machine-readable output.")] = False,
+) -> None:
+    """Market overview in one go: cards, mood, promos, TOTW, alerts, sources, backtest."""
+    import json
+    from dataclasses import asdict
+
+    from fcast.analysis.overview import build_overview
+    from fcast.db.base import utcnow
+
+    settings = get_settings()
+    with _db_session() as session:
+        ov = build_overview(session, settings, utcnow())
+    if as_json:
+        typer.echo(json.dumps(asdict(ov), default=str, ensure_ascii=False, indent=1))
+        return
+
+    tz = settings.tz
+    mood = ov.mood
+    console.print(
+        f"[bold]Marktlage {ov.generated_at.astimezone(tz):%d.%m.%Y %H:%M}[/bold] "
+        f"({ov.platform}) · {mood.cards} Karten · Ø 24 h {_pct(mood.avg_change_24h_pct)} "
+        f"· {mood.rising} steigend, {mood.falling} fallend"
+    )
+    for c in ov.cards:
+        parts = [
+            f"[bold]{c.name}[/bold] {c.card_type or ''}".strip(),
+            format_coins(c.price)
+            + (f" (vor {c.price_age_h:.1f} h)".replace(".", ",") if c.price_age_h else ""),
+            f"24 h {_pct(c.change_24h_pct)}",
+            f"Ø7T {_pct(c.deviation_pct)}",
+            f"7T {format_coins(c.week_low)}-{format_coins(c.week_high)} "
+            f"({c.points_7d} P., {c.days_of_data} Tg.)",
+        ]
+        if c.extinct:
+            parts.append("[red]extinct[/red]")
+        elif c.listings:
+            parts.append(
+                f"{len(c.listings)} Angebote, Lücke {_pct(c.gap_pct)}, Luft {_pct(c.headroom_pct)}"
+            )
+        if c.uev_score is not None:
+            parts.append(f"ÜV {c.uev_score:.0f}")
+        if c.holo_spread_pct is not None:
+            parts.append(f"Holo {format_coins(c.holo_price)} ({_pct(c.holo_spread_pct)})")
+        if c.cheapest_hour is not None:
+            parts.append(f"günstig ~{c.cheapest_hour} Uhr")
+        if c.cheapest_weekday is not None:
+            parts.append(f"günstig {c.cheapest_weekday}")
+        if c.signals:
+            parts.append("[yellow]" + ", ".join(c.signals) + "[/yellow]")
+        if c.note:
+            parts.append(f"[dim]{c.note}[/dim]")
+        console.print(" · ".join(parts))
+    for title, lines in (
+        (
+            "Promos",
+            [
+                f"{p.name} ab {p.starts_at.astimezone(tz):%a %d.%m. %H:%M} "
+                f"(Konfidenz {p.confidence:.0%}): "
+                + (", ".join(p.candidates) or "keine Kandidaten")
+                for p in ov.promos
+            ],
+        ),
+        (
+            f"TOTW {ov.totw_week} (Release {ov.totw_release.astimezone(tz):%a %d.%m. %H:%M})"
+            if ov.totw_release
+            else "TOTW",
+            [
+                f"{t.rank}. {t.name} ({t.team}) {t.reasons}"
+                + (f" · {t.card} {format_coins(t.price)}" if t.card else "")
+                for t in ov.totw
+            ],
+        ),
+        ("Alerts 24 h", ov.alerts),
+        ("Quellen", ov.sources),
+        ("Backtest", [ov.backtest] if ov.backtest else []),
+    ):
+        console.print(f"[bold]{title}[/bold]")
+        for line in lines or ["-"]:
+            console.print(f"  {line}", highlight=False)
+
+
 alert_app = typer.Typer(help="Push alerts.", no_args_is_help=True)
 app.add_typer(alert_app, name="alert")
 

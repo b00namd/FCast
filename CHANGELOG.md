@@ -4,6 +4,13 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Marktlage auf Zuruf
+- CLI `fcast lage [--json]`: alles für eine Analyse in einem Rutsch – je Karte Preis, Alter,
+  24-h-Änderung, Abstand zum Ø 7 Tage, Spanne, Angebote/Lücke/Luft, ÜV-Score, Holo-Abstand,
+  günstigste Tageszeit (ab 3 Tagen Daten) bzw. Wochentag (ab 14 Tagen), Signale, Notiz; dazu
+  Marktstimmung, Promos mit Kandidaten, TOTW-Prognose, Alerts der letzten 24 h, Quellenstatus und
+  Kauf-Dip-Backtest der letzten 30 Tage. Grundlage für Analysen und Tipps auf Nachfrage.
+
 ### Phase 8 – Backtesting & Lernen aus Promos
 - **Engine** (`fcast.backtest`): spielt `BUY_DIP` und `PROMO_PREBUY` auf den gespeicherten Preisen
   nach – ohne Blick in die Zukunft, Kauf zum Snapshot-Preis, Verkauf am Ziel (Ø 7 Tage), nach
