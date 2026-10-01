@@ -721,6 +721,8 @@ def lage(
             parts.append(
                 f"{len(c.listings)} Angebote, Lücke {_pct(c.gap_pct)}, Luft {_pct(c.headroom_pct)}"
             )
+            if c.thin_hours:
+                parts.append(f"dünn seit {c.thin_hours:.0f} h")
         if c.uev_score is not None:
             parts.append(f"ÜV {c.uev_score:.0f}")
         if c.holo_spread_pct is not None:

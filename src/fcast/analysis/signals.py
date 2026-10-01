@@ -4,11 +4,12 @@ Every signal carries a recommendation on a valid price step and the expected pro
 the 5 % EA tax, plus human-readable reasons (German, shown in the dashboard and alerts).
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from fcast.analysis.market import headroom_pct, supply_gap_pct
+from fcast.analysis.market import effective_price, headroom_pct, supply_gap_pct
 from fcast.analysis.pricing import (
     net_after_tax,
     profit,
@@ -23,6 +24,7 @@ MIN_POINTS_DIP = 6  # a 7-day mean from fewer snapshots is not trustworthy
 # just the launch price, so a dip needs a few days of history.
 MIN_SPAN_DIP = timedelta(days=3)
 FULL_LISTINGS = 5  # FUTBIN shows at most five lowest BINs
+THIN_MIN_HOURS = 6.0  # thin supply counts as persistent from this duration on
 
 
 class Rule(StrEnum):
@@ -88,10 +90,38 @@ class Supply:
     listings: tuple[int, ...]
     range_max: int | None = None
     extinct_since: datetime | None = None
+    thin_hours: float | None = None  # how long supply has been thin without a break
 
     @property
     def extinct(self) -> bool:
         return not self.listings
+
+    @classmethod
+    def observed(
+        cls,
+        listings: tuple[int, ...],
+        range_max: int | None,
+        outlier_gap_pct: float,
+        extinct_since: datetime | None = None,
+        thin_hours: float | None = None,
+    ) -> "Supply":
+        """Supply from raw lowest BINs, without a single outlier listing far below the rest."""
+        effective = effective_price(listings, outlier_gap_pct)
+        kept = tuple(p for p in listings if effective is None or p >= effective)
+        return cls(kept, range_max, extinct_since, thin_hours)
+
+
+def thin_since(observations: Sequence[tuple[datetime, int]]) -> datetime | None:
+    """Start of the current run of thin supply (fewer than five listings, or none).
+
+    `observations` are (time, number of listings), oldest first. None if supply is full now.
+    """
+    start = None
+    for at, count in reversed(observations):
+        if count >= FULL_LISTINGS:
+            break
+        start = at
+    return start
 
 
 def _coins(value: float) -> str:
@@ -188,6 +218,10 @@ def overprice_score(
             reasons.append(f"Nur {count} Angebot{'e' if count != 1 else ''}")
         if gap is not None and gap >= 5:
             reasons.append(f"Lücke zum nächsten Angebot {gap:.0f} %".replace(".", ","))
+        # Thin for a long time: the scarcity is real, not a snapshot between two listings.
+        if supply.thin_hours is not None and supply.thin_hours >= THIN_MIN_HOURS:
+            supply_part = min(1.0, supply_part + 0.2 * min(supply.thin_hours / 48, 1.0))
+            reasons.append(f"Angebot seit {supply.thin_hours:.0f} h dünn")
 
     # Trend: rising prices mean demand; use the 24 h change, else the deviation from the mean.
     change = stats.change_24h_pct if stats.change_24h_pct is not None else stats.deviation_pct

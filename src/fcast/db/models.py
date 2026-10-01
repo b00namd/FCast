@@ -222,6 +222,27 @@ class MarketState(Base):
         return not self.listings
 
 
+class MarketObservation(Base):
+    """History of the supply picture: one row per observation (lowest BINs, EA maximum)."""
+
+    __tablename__ = "market_observations"
+    __table_args__ = (
+        Index("ix_market_observations_player_id_observed_at", "player_id", "observed_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"))
+    platform: Mapped[Platform] = mapped_column(str_enum(Platform))
+    source: Mapped[str] = mapped_column(String(32))
+    observed_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    listings_csv: Mapped[str] = mapped_column(String(120), default="")
+    range_max: Mapped[int | None]
+
+    @property
+    def listings(self) -> tuple[int, ...]:
+        return tuple(int(value) for value in self.listings_csv.split(",") if value)
+
+
 class AppSetting(Base):
     """Key/value settings changed in the dashboard; they override environment defaults."""
 

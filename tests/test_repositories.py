@@ -326,3 +326,22 @@ def test_player_chem_styles_property(session: Session) -> None:
     )
     assert player.chem_styles == [("Hunter", 77), ("Artist", 8), ("Engine", 8)]
     assert repo.upsert_player(session, 2).chem_styles == []
+
+
+def test_market_observations_keep_the_supply_history(session: Session) -> None:
+    player = repo.upsert_player(session, 4711)
+    for hours, listings in ((0, (1_000,) * 5), (1, (1_000, 1_100)), (2, (1_050,))):
+        at = T0 + timedelta(hours=hours)
+        repo.record_market_state(session, player, Platform.PC, "futbin", at, listings, 150, 5_000)
+    # The same observation again (FUTBIN page not updated yet) is not duplicated.
+    repo.record_market_state(
+        session, player, Platform.PC, "futbin", T0 + timedelta(hours=2), (1_050,), 150, 5_000
+    )
+    history = repo.list_market_observations(session, player, Platform.PC)
+    assert [len(o.listings) for o in history] == [5, 2, 1]
+    assert history[-1].range_max == 5_000
+    since = repo.list_market_observations(
+        session, player, Platform.PC, since=T0 + timedelta(hours=1)
+    )
+    assert len(since) == 2
+    assert repo.list_market_observations(session, player, Platform.CONSOLE) == []

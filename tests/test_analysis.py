@@ -261,3 +261,28 @@ def test_signal_config_from_settings() -> None:
     cfg = sig.SignalConfig.from_settings(settings)
     assert cfg.dip_pct == 12.5
     assert cfg.uev_threshold == 70
+
+
+def test_thin_since_finds_the_current_run_of_thin_supply() -> None:
+    h = timedelta(hours=1)
+    assert sig.thin_since([]) is None
+    assert sig.thin_since([(NOW - 2 * h, 2), (NOW - h, 5), (NOW, 5)]) is None  # full now
+    history = [(NOW - 3 * h, 2), (NOW - 2 * h, 5), (NOW - h, 3), (NOW, 0)]
+    assert sig.thin_since(history) == NOW - h  # the break at -2 h ends the earlier run
+
+
+def test_persistent_thin_supply_raises_the_uev_score() -> None:
+    stats = price_stats(rising(100_000), NOW)
+    listings = (100_000, 104_000, 105_000)
+    fresh = sig.overprice_score(stats, sig.Supply(listings, 300_000), CFG)
+    lasting = sig.overprice_score(stats, sig.Supply(listings, 300_000, thin_hours=48), CFG)
+    assert fresh is not None and lasting is not None
+    assert lasting.score > fresh.score
+    assert "Angebot seit 48 h dünn" in lasting.reasons
+    short = sig.overprice_score(stats, sig.Supply(listings, 300_000, thin_hours=2), CFG)
+    assert short is not None and short.score == fresh.score
+
+
+def test_supply_without_outlier_listing() -> None:
+    supply = sig.Supply.observed((5_000, 9_800, 9_900, 10_000), 50_000, 15.0)
+    assert supply.listings == (9_800, 9_900, 10_000)

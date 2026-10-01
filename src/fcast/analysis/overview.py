@@ -44,6 +44,7 @@ class CardLine:
     extinct: bool
     gap_pct: float | None
     headroom_pct: float | None
+    thin_hours: float | None  # supply below five listings for this long
     uev_score: float | None
     holo_price: int | None
     holo_spread_pct: float | None
@@ -139,6 +140,7 @@ def card_lines(session: Session, settings: Settings, now: datetime) -> list[Card
                 extinct=a.extinct,
                 gap_pct=a.supply_gap_pct,
                 headroom_pct=a.headroom_pct,
+                thin_hours=a.supply.thin_hours if a.supply else None,
                 uev_score=a.overprice.score if a.overprice else None,
                 holo_price=a.holo.price if a.holo else None,
                 holo_spread_pct=a.holo_spread_pct,

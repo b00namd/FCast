@@ -16,6 +16,7 @@ from fcast.db.models import (
     AlertLog,
     AppSetting,
     LinkType,
+    MarketObservation,
     MarketState,
     Player,
     PortfolioPosition,
@@ -232,8 +233,52 @@ def record_market_state(
         state.extinct_since = None
     elif state.extinct_since is None:
         state.extinct_since = observed_at
+    _record_observation(session, state, range_max)
     session.flush()
     return state
+
+
+def _record_observation(session: Session, state: MarketState, range_max: int | None) -> None:
+    """Append to the supply history (once per source and observation time)."""
+    known = session.scalar(
+        select(MarketObservation.id)
+        .where(
+            MarketObservation.player_id == state.player_id,
+            MarketObservation.platform == state.platform,
+            MarketObservation.source == state.source,
+            MarketObservation.observed_at == state.observed_at,
+        )
+        .limit(1)
+    )
+    if known is None:
+        session.add(
+            MarketObservation(
+                player_id=state.player_id,
+                platform=state.platform,
+                source=state.source,
+                observed_at=state.observed_at,
+                listings_csv=state.listings_csv,
+                range_max=range_max,
+            )
+        )
+
+
+def list_market_observations(
+    session: Session,
+    player: Player,
+    platform: Platform,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> Sequence[MarketObservation]:
+    """Supply history of a card, oldest first."""
+    stmt = select(MarketObservation).where(
+        MarketObservation.player_id == player.id, MarketObservation.platform == platform
+    )
+    if since is not None:
+        stmt = stmt.where(MarketObservation.observed_at >= since)
+    if until is not None:
+        stmt = stmt.where(MarketObservation.observed_at <= until)
+    return session.scalars(stmt.order_by(MarketObservation.observed_at, MarketObservation.id)).all()
 
 
 def get_market_state(session: Session, player: Player, platform: Platform) -> MarketState | None:

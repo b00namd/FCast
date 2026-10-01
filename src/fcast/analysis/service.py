@@ -25,6 +25,7 @@ class CardAnalysis:
     supply: sig.Supply | None
     overprice: sig.OverpriceScore | None
     effective_price: int | None = None  # market price after outlier dampening
+    thin_from: datetime | None = None  # supply thin (< 5 listings) since
     holo_player: Player | None = None
     holo: sig.HoloQuote | None = None
     signals: list[sig.Signal] = field(default_factory=list)
@@ -59,7 +60,10 @@ class CardAnalysis:
 
 
 def _supply(
-    market: MarketState | None, latest_at: datetime | None, outlier_gap_pct: float
+    market: MarketState | None,
+    latest_at: datetime | None,
+    outlier_gap_pct: float,
+    thin_from: datetime | None = None,
 ) -> sig.Supply | None:
     """Supply for the signals: without outlier listings, and only if not older than the price."""
     if market is None:
@@ -67,11 +71,22 @@ def _supply(
     if latest_at is not None and market.observed_at < latest_at and market.listings:
         # A newer price came from a source without supply data; do not mix stale depth in.
         return None
-    effective = effective_price(market.listings, outlier_gap_pct)
-    listings = tuple(p for p in market.listings if effective is None or p >= effective)
-    return sig.Supply(
-        listings=listings, range_max=market.range_max, extinct_since=market.extinct_since
+    thin_hours = (
+        (market.observed_at - thin_from).total_seconds() / 3600 if thin_from is not None else None
     )
+    return sig.Supply.observed(
+        market.listings, market.range_max, outlier_gap_pct, market.extinct_since, thin_hours
+    )
+
+
+def thin_supply_since(
+    session: Session, player: Player, settings: Settings, now: datetime
+) -> datetime | None:
+    """Since when the card has had fewer than five listings without a break (last 7 days)."""
+    observations = repo.list_market_observations(
+        session, player, settings.platform, since=now - timedelta(days=7)
+    )
+    return sig.thin_since([(o.observed_at, len(o.listings)) for o in observations])
 
 
 def _holo_quote(session: Session, holo: Player, settings: Settings) -> sig.HoloQuote | None:
@@ -92,7 +107,8 @@ def analyze_player(
     points: list[Point] = [(s.captured_at, s.price) for s in snapshots]
     stats = price_stats(points, now)
     market = repo.get_market_state(session, player, platform)
-    supply = _supply(market, stats.current_at, settings.outlier_gap_pct)
+    thin_from = thin_supply_since(session, player, settings, now) if market else None
+    supply = _supply(market, stats.current_at, settings.outlier_gap_pct, thin_from)
     entry = repo.get_watch(session, player)
     cfg = sig.SignalConfig.from_settings(settings)
     name = player.display_name
@@ -112,6 +128,7 @@ def analyze_player(
         market=market,
         supply=supply,
         overprice=sig.overprice_score(stats, supply, cfg),
+        thin_from=thin_from,
         holo_player=holo_player,
         holo=holo,
         effective_price=(

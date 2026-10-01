@@ -1089,3 +1089,22 @@ def test_backtest_page_runs_rules_sweeps_and_curves(
     assert "im TOTW" in curves.text
     assert "+20,0 %" in curves.text
     assert "curve-data" in curves.text
+
+
+def test_player_page_shows_how_long_supply_is_thin(
+    client: TestClient, collector: Collector
+) -> None:
+    now = datetime.now(UTC).replace(microsecond=0)
+    add_watch(collector, 8)
+    with collector.session_factory.begin() as session:
+        player = repo.get_player_by_ea_id(session, 8)
+        assert player is not None
+        for hours, listings in ((30, (9_000,) * 5), (20, (9_000, 9_500)), (0, (9_000, 9_600))):
+            at = now - timedelta(hours=hours)
+            repo.add_snapshot(session, player, Platform.PC, 9_000, "futbin", at)
+            repo.record_market_state(
+                session, player, Platform.PC, "futbin", at, listings, 150, 50_000
+            )
+    page = client.get("/players/8").text
+    assert "Weniger als 5 Angebote seit" in page
+    assert "Angebot seit 20 h dünn" in page  # reason of the ÜV score

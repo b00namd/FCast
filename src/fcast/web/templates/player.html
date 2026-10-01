@@ -69,7 +69,7 @@
         <tr><td>Abweichung zu Ø 7 Tage</td><td class="num">{{ a.stats.deviation_pct | pct }}</td></tr>
         <tr><td>Volatilität</td><td class="num">{% if a.stats.volatility_pct is not none %}{{ "%.1f" | format(a.stats.volatility_pct) | replace(".", ",") }} %{% else %}–{% endif %}</td></tr>
         <tr><td>Preisänderungen / Tag</td><td class="num">{% if a.stats.changes_per_day is not none %}{{ "%.1f" | format(a.stats.changes_per_day) | replace(".", ",") }}{% else %}–{% endif %}</td></tr>
-        <tr><td>ÜV-Score</td><td class="num">{% if a.overprice %}<strong>{{ a.overprice.score | round | int }}</strong> / 100{% else %}–{% endif %}</td></tr>
+        <tr><td>ÜV-Score{% if a.overprice and a.overprice.reasons %}<br><small class="muted">{{ a.overprice.reasons | join(" · ") }}</small>{% endif %}</td><td class="num">{% if a.overprice %}<strong>{{ a.overprice.score | round | int }}</strong> / 100{% else %}–{% endif %}</td></tr>
       </tbody>
     </table>
   </div>
@@ -102,6 +102,7 @@
       EA-Preisspanne {{ a.market.range_min | coins }} – {{ a.market.range_max | coins }}
       {% if a.headroom_pct is not none %} · Luft bis Maximum {{ "%.0f" | format(a.headroom_pct) }} %{% endif %}
       · Stand {{ a.market.observed_at | dt }} ({{ a.market.source }})
+      {% if a.thin_from and not a.extinct %}<br>Weniger als 5 Angebote seit {{ a.thin_from | dt }}{% endif %}
     </small>
   </p>
 {% else %}
