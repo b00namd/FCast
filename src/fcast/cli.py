@@ -779,14 +779,24 @@ def cards(
     ] = None,
 ) -> None:
     """Play value of all known cards, the usual price for it and the check against usage."""
-    from fcast.analysis.cards import agreement, card_values, expected_price, price_fit
+    from sqlalchemy import select
+
+    from fcast.analysis.cards import (
+        agreement,
+        card_values,
+        expected_price,
+        price_fit,
+        stat_drivers,
+    )
     from fcast.db.base import utcnow
     from fcast.db.models import Player
 
     settings = get_settings()
     with _db_session() as session:
         values = card_values(session, settings, utcnow())
-        names = {p.id: p.display_name for p in session.query(Player).filter(Player.id.in_(values))}
+        players = session.scalars(select(Player).where(Player.id.in_(values))).all()
+        names = {p.id: p.display_name for p in players}
+        stats = {p.id: p.attributes.stats for p in players if p.attributes}
     fit = price_fit(values)
     check = agreement(values)
     rows = sorted(
@@ -818,6 +828,18 @@ def cards(
         )
     if fit is None:
         typer.echo("Noch zu wenige bepreiste Goldkarten für die übliche Preiskurve.")
+    drivers = stat_drivers(values, stats)
+    if drivers:
+
+        def fmt(items: list[tuple[str, float, int]]) -> str:
+            return ", ".join(f"{name} {corr:+.2f}".replace(".", ",") for name, corr, _ in items)
+
+        typer.echo(
+            f"Werte, die mit der Nutzung zusammenhängen ({drivers[0][2]} Goldkarten, "
+            "Preis herausgerechnet):"
+        )
+        typer.echo(f"  am stärksten: {fmt(drivers[:6])}")
+        typer.echo(f"  am schwächsten: {fmt(drivers[-3:])}")
 
 
 alert_app = typer.Typer(help="Push alerts.", no_args_is_help=True)

@@ -225,8 +225,28 @@ def test_price_fit_finds_what_quality_usually_costs(factory: sessionmaker[Sessio
     assert expected is not None and expected > 20_000
     assert rs.undervalued(bargain.meta, bargain.price, expected, rs.RadarConfig()) is not None
     check = cards.agreement(values)
-    assert (check.cards, check.basis) == (20, "Spiele gesamt (nur Goldkarten)")
-    assert check.correlation == pytest.approx(1.0)
+    assert (check.cards, check.basis) == (20, "Spiele gesamt, Preis herausgerechnet (Gold)")
+    assert check.correlation is not None
+
+
+def test_usage_is_compared_with_the_price_taken_out() -> None:
+    """Cheap cards are played more; quality shows in the usage on top of that."""
+    values = {}
+    for i in range(12):
+        expensive = i % 2 == 0
+        price = 80_000 if expensive else 5_000
+        play = 50.0 + i + (30 if expensive else 0)  # good cards are usually expensive
+        games = round(1_000_000 / price * (1 + (play - 50) / 20))  # cheap -> more, good -> more
+        value = pv.PlayValue(play, pv.STRIKER, 80.0, ())
+        values[i] = cards.CardValue(i, value, play, price, None, games, 85, True)
+    raw = pv.usage_agreement([(v.play.score, float(v.games or 0)) for v in values.values()])
+    adjusted = cards.agreement(values)
+    assert raw is not None and adjusted.correlation is not None
+    assert raw < 0  # without taking the price out, good (expensive) cards look less played
+    assert adjusted.correlation > 0.4  # with the price taken out, quality shows
+    stats = {i: {"Pace": 70 + 2 * i, "Strength": 90 - i % 2} for i in values}
+    drivers = cards.stat_drivers(values, stats)
+    assert drivers[0][0] == "Pace" and drivers[0][1] > 0.8
 
 
 def test_special_and_holo_cards_are_not_compared(factory: sessionmaker[Session]) -> None:

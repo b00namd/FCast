@@ -8,6 +8,7 @@ and are not compared.
 """
 
 import math
+import statistics
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -143,15 +144,62 @@ class Agreement:
     basis: str  # what the play value was compared with
 
 
+def usage_residuals(values: dict[int, CardValue]) -> dict[int, float]:
+    """How much more a base field card is played than its price suggests (log scale).
+
+    Cheap cards are owned and played by many more people, so the games counter mostly mirrors
+    the price. The residual of log(games) over log(price) is the usage that quality explains.
+    """
+    cards = [
+        v
+        for v in values.values()
+        if v.base_card and v.games and v.price and v.play.group != pv.KEEPER
+    ]
+    if len(cards) < MIN_RATE_PAIRS:
+        return {}
+    log_price = [math.log(v.price or 1) for v in cards]
+    log_games = [math.log(v.games or 1) for v in cards]
+    try:
+        slope, intercept = statistics.linear_regression(log_price, log_games)
+    except statistics.StatisticsError:
+        return {}
+    return {
+        v.player_id: g - (intercept + slope * p)
+        for v, p, g in zip(cards, log_price, log_games, strict=True)
+    }
+
+
 def agreement(values: dict[int, CardValue]) -> Agreement:
     """How well the play value agrees with real usage (Spearman rank correlation).
 
-    Games per day are comparable across cards; the total games counter only among base cards
-    (special cards are younger and have had less time to be played).
+    Preferred: games per day. Until there is enough history: total games of base field cards
+    with the price taken out (special cards are younger, cheap cards are owned by more people).
     """
     rates = [(v.play.score, v.usage_rate) for v in values.values() if v.usage_rate]
     if len(rates) >= MIN_RATE_PAIRS:
         pairs = [(p, float(r)) for p, r in rates if r is not None]
         return Agreement(pv.usage_agreement(pairs), len(pairs), "Spiele pro Tag")
-    games = [(v.play.score, float(v.games)) for v in values.values() if v.games and v.base_card]
-    return Agreement(pv.usage_agreement(games), len(games), "Spiele gesamt (nur Goldkarten)")
+    residuals = usage_residuals(values)
+    pairs = [(values[pid].play.score, r) for pid, r in residuals.items()]
+    return Agreement(
+        pv.usage_agreement(pairs), len(pairs), "Spiele gesamt, Preis herausgerechnet (Gold)"
+    )
+
+
+def stat_drivers(
+    values: dict[int, CardValue], stats: dict[int, dict[str, int]]
+) -> list[tuple[str, float, int]]:
+    """Which single stats go along with price-adjusted usage: (stat, correlation, cards)."""
+    residuals = usage_residuals(values)
+    names = sorted({name for pid in residuals for name in stats.get(pid, {})})
+    found = []
+    for name in names:
+        pairs = [
+            (float(stats[pid][name]), r)
+            for pid, r in residuals.items()
+            if name in stats.get(pid, {})
+        ]
+        corr = pv.usage_agreement(pairs)
+        if corr is not None:
+            found.append((name, corr, len(pairs)))
+    return sorted(found, key=lambda item: -item[1])
