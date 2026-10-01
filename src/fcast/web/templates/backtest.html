@@ -27,7 +27,7 @@
       <input type="text" name="sweep" value="{{ form.sweep }}" placeholder="{{ sweep_hint }}">
       <small class="hint">Möglich: {{ sweepable | join(", ") }}</small>
     </label>
-    {% if selected.value == "BUY_DIP" %}
+    {% if selected.value in ("BUY_DIP", "OVERPRICE_CHANCE") %}
     <label>Max. Haltedauer (h) <small class="muted">(Standard {{ report.params.max_hold_h | int }})</small>
       <input type="text" name="hold" value="{{ form.hold }}" inputmode="decimal" placeholder="{{ report.params.max_hold_h | int }}">
     </label>
@@ -90,7 +90,8 @@
 {% if not report.trades %}
   <p class="muted">Keine Trades im Zeitraum.
   {% if report.snapshots == 0 %}Es gibt noch keine Preise im Zeitraum.
-  {% elif selected.value == "BUY_DIP" %}Kauf-Dips brauchen mindestens eine Woche Preisverlauf pro Karte.
+  {% elif selected.value == "BUY_DIP" %}Kauf-Dips brauchen mindestens drei Tage Preisverlauf pro Karte.
+  {% elif selected.value == "OVERPRICE_CHANCE" %}ÜV braucht den Verlauf der Angebotslage (wird seit dem 01.10.2026 gespeichert).
   {% else %}Es braucht Promos mit Startdatum im Zeitraum und verknüpfte Karten mit Preisen.{% endif %}</p>
 {% else %}
 <div class="overflow-auto">
@@ -158,7 +159,8 @@ TOTW: die bestplatzierten Kandidaten der Prognose, getrennt nach „im TOTW“ u
     <li>Kauf zum Snapshot-Preis (günstigstes Angebot). Danach wird zum Ziel eingestellt (Kauf-Dip: Ø 7 Tage); verkauft, sobald der Marktpreis das Ziel erreicht.</li>
     <li>Nach der Haltedauer, beim Stop-Loss oder zum Promo-Ausstieg: Verkauf eine Preisstufe unter dem Marktpreis.</li>
     <li>5 % EA-Steuer auf jeden Verkauf. Eine Position pro Karte gleichzeitig. Offene Positionen werden zum letzten Preis bewertet.</li>
-    <li>ÜV-Chance und Holo-ÜV lassen sich nicht backtesten: Ob eine überteuerte Karte verkauft wurde, sieht FCast nicht.</li>
+    <li>ÜV-Chance: Kauf zum Marktpreis, Einstellen zum ÜV-Preis; gilt als verkauft, sobald das günstigste Angebot den ÜV-Preis erreicht – erst dann wäre unser Angebot sicher das günstigste. Das ist vorsichtig gerechnet: Ein Käufer, der genau unsere Karte nimmt, bleibt unsichtbar.</li>
+    <li>Holo-ÜV lässt sich nicht backtesten: Ob jemand die normale Karte zum Holo-Preis kauft, sieht FCast nicht.</li>
   </ul>
 </details>
 {% endblock %}

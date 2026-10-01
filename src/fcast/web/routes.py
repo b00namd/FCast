@@ -693,10 +693,12 @@ async def totw_refresh(request: Request) -> Response:
 
 BACKTEST_RULES = {
     sig.Rule.BUY_DIP: "Kauf-Dip (BUY_DIP)",
+    sig.Rule.OVERPRICE_CHANCE: "ÜV-Chance (OVERPRICE_CHANCE)",
     sig.Rule.PROMO_PREBUY: "Promo-Vorkauf (PROMO_PREBUY)",
 }
 SWEEP_HINTS = {
     sig.Rule.BUY_DIP: "dip_pct=5,10,15,20",
+    sig.Rule.OVERPRICE_CHANCE: "uev_threshold=50,60,70",
     sig.Rule.PROMO_PREBUY: "entry_days=2,3,5,7",
 }
 

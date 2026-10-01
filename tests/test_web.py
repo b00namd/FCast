@@ -1040,6 +1040,7 @@ def test_backtest_page_runs_rules_sweeps_and_curves(
     page = client.get("/backtest")
     assert page.status_code == 200
     assert "Kauf-Dip (BUY_DIP)" in page.text
+    assert "ÜV-Chance (OVERPRICE_CHANCE)" in page.text
     assert "905" in page.text  # one dip, sold at the 7-day mean
     assert "Fingerprint" in page.text
 

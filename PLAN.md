@@ -123,7 +123,10 @@ Einstellungen, Verlauf und Test-Push; CLI `fcast alert test|check`.
 
 ---
 
-## Phase 9 – Betrieb & bessere Signale
+## ✅ Phase 9 – Betrieb & bessere Signale (erledigt)
+> **Stand 01.10.2026:** Abfrage-Takt, tägliches Backup auf den Host, Verlauf der Angebotslage mit
+> „dünn seit“, ÜV im Backtest, Mindestprofit für ÜV. Der ÜV-Backtest wird aussagekräftig, sobald
+> ein paar Tage Angebots-Verlauf vorliegen (Aufzeichnung seit 01.10.2026).
 **Aufgaben**
 - **Abfrage-Stufen:** Abfrage-Intervall pro Watchlist-Karte (jede Runde, alle 2 h, alle 6 h);
   Collector überspringt Karten, die noch nicht fällig sind. Einstellbar in Watchlist und CLI

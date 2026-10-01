@@ -9,6 +9,9 @@ Assumptions (deterministic, so the same data always gives the same report):
 - Only snapshots inside the window are used; positions still open at its end are valued at the
   last price (market sale) and reported separately.
 - 5 % EA tax on every sale. One position per card at a time.
+- ÜV (OVERPRICE_CHANCE) uses the stored supply history: the signal sees the listings observed
+  with the snapshot; the card is listed at the ÜV price and counts as sold once the lowest BIN
+  reaches it.
 """
 
 from bisect import bisect_left, bisect_right
@@ -25,6 +28,11 @@ from fcast.config import Settings
 from fcast.promos.scoring import CardInfo, PromoInfo, PromoWeights, is_prebuy, score_card
 
 MAX_QUOTE_AGE = timedelta(hours=12)  # a price older than this is no longer "the" price
+SUPPLY_MAX_AGE = timedelta(hours=2)  # supply observed this long before a snapshot still counts
+THIN_HISTORY = 400  # observations looked back for "thin since" (about a week)
+
+# (observed at, lowest BINs, EA maximum)
+Observation = tuple[datetime, tuple[int, ...], int | None]
 
 
 class Exit(StrEnum):
@@ -46,6 +54,7 @@ class CardSeries:
     club: str | None = None
     league: str | None = None
     nation: str | None = None
+    observations: tuple[Observation, ...] = ()  # supply history, oldest first
 
     @property
     def info(self) -> CardInfo:
@@ -69,6 +78,9 @@ class Params:
     min_profit: int = 500
     max_hold_h: float = 72.0
     stop_loss_pct: float = 0.0  # 0 = off
+    # OVERPRICE_CHANCE
+    uev_threshold: float = 60.0
+    outlier_gap_pct: float = 15.0
     # PROMO_PREBUY
     threshold: float = 45.0
     entry_days: float = 3.0  # buy this many days before the promo starts (2-7)
@@ -80,6 +92,8 @@ class Params:
             dip_pct=settings.dip_pct,
             min_margin_pct=settings.min_margin_pct,
             min_profit=settings.min_profit,
+            uev_threshold=settings.uev_threshold,
+            outlier_gap_pct=settings.outlier_gap_pct,
             threshold=settings.promo_prebuy_threshold,
         )
 
@@ -91,6 +105,7 @@ class Params:
 
 SWEEPABLE: dict[sig.Rule, tuple[str, ...]] = {
     sig.Rule.BUY_DIP: ("dip_pct", "min_margin_pct", "max_hold_h", "stop_loss_pct"),
+    sig.Rule.OVERPRICE_CHANCE: ("uev_threshold", "min_margin_pct", "max_hold_h", "stop_loss_pct"),
     sig.Rule.PROMO_PREBUY: ("threshold", "entry_days", "exit_h"),
 }
 SUPPORTED = tuple(SWEEPABLE)
@@ -223,6 +238,61 @@ def simulate_dip(
             target = round_to_price_step(stats.week.mean, "down")
             note = f"{stats.deviation_pct or 0:+.1f} % unter Ø".replace(".", ",")
             trade, exit_index = _close(card, index, target, params, end, note)
+            trades.append(trade)
+            free_from = exit_index + 1
+    return sorted(trades, key=lambda t: (t.bought_at, t.ea_id))
+
+
+# --- OVERPRICE_CHANCE (ÜV) ------------------------------------------------------------------
+
+
+def supply_at(
+    card: CardSeries, at: datetime, params: Params, times: Sequence[datetime] | None = None
+) -> sig.Supply | None:
+    """Supply as observed with the snapshot at `at` (outliers removed, with "thin since")."""
+    times = times if times is not None else [o[0] for o in card.observations]
+    i = bisect_right(times, at)
+    if i == 0:
+        return None
+    observed_at, listings, range_max = card.observations[i - 1]
+    if at - observed_at > SUPPLY_MAX_AGE:
+        return None
+    history = card.observations[max(0, i - THIN_HISTORY) : i]
+    start = sig.thin_since([(t, len(prices)) for t, prices, _ in history])
+    thin_hours = (observed_at - start).total_seconds() / 3600 if start is not None else None
+    return sig.Supply.observed(listings, range_max, params.outlier_gap_pct, thin_hours=thin_hours)
+
+
+def simulate_uev(
+    series: Sequence[CardSeries],
+    cache: StatsCache,
+    params: Params,
+    end: datetime,
+) -> list[Trade]:
+    """ÜV: buy at the market when the ÜV signal fires, list at the ÜV price, wait for the market."""
+    cfg = sig.SignalConfig(
+        min_margin_pct=params.min_margin_pct,
+        min_profit=params.min_profit,
+        outlier_gap_pct=params.outlier_gap_pct,
+        uev_threshold=params.uev_threshold,
+    )
+    trades: list[Trade] = []
+    for card in series:
+        if not card.observations:
+            continue
+        times = [o[0] for o in card.observations]
+        free_from = 0
+        for index, stats in cache.get(card.ea_id, []):
+            if index < free_from:
+                continue
+            supply = supply_at(card, card.points[index][0], params, times)
+            if supply is None or supply.extinct:
+                continue  # extinct cards cannot be bought
+            signal = sig.overprice_chance(card.ea_id, card.name, stats, supply, cfg)
+            if signal is None or signal.recommended is None:
+                continue
+            note = f"ÜV-Score {signal.score:.0f}, {len(supply.listings)} Angebote"
+            trade, exit_index = _close(card, index, signal.recommended, params, end, note)
             trades.append(trade)
             free_from = exit_index + 1
     return sorted(trades, key=lambda t: (t.bought_at, t.ea_id))

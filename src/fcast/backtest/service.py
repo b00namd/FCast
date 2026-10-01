@@ -15,7 +15,14 @@ from fcast.backtest import engine
 from fcast.backtest.curves import CardCurve, EventCurves, event_curve
 from fcast.config import Settings
 from fcast.db import repositories as repo
-from fcast.db.models import Player, PriceSnapshot, SourceRef, TotwActual, TotwPrediction
+from fcast.db.models import (
+    MarketObservation,
+    Player,
+    PriceSnapshot,
+    SourceRef,
+    TotwActual,
+    TotwPrediction,
+)
 from fcast.promos.scoring import PromoInfo, PromoWeights, link_strength
 from fcast.promos.service import FUTBIN
 from fcast.totw import calendar
@@ -50,6 +57,18 @@ def load_series(
         points[player_id].append((at, price))
     if not points:
         return []
+    observations: dict[int, list[engine.Observation]] = defaultdict(list)
+    for obs in session.scalars(
+        select(MarketObservation)
+        .where(
+            MarketObservation.player_id.in_(points),
+            MarketObservation.platform == settings.platform,
+            MarketObservation.observed_at >= start - LOOKBACK,
+            MarketObservation.observed_at <= end,
+        )
+        .order_by(MarketObservation.player_id, MarketObservation.observed_at, MarketObservation.id)
+    ):
+        observations[obs.player_id].append((obs.observed_at, obs.listings, obs.range_max))
     players = session.scalars(select(Player).where(Player.id.in_(points))).all()
     slugs = {
         ref.player_id: ref.external_ref.rsplit("/", 1)[-1]
@@ -66,6 +85,7 @@ def load_series(
             club=player.club,
             league=player.league,
             nation=player.nation,
+            observations=tuple(observations[player.id]),
         )
         for player in players
     ]
@@ -101,6 +121,8 @@ def fingerprint(
         digest.update(f"{card.ea_id}:{card.club}:{card.league}:{card.nation}:{card.slug}".encode())
         for at, price in card.points:
             digest.update(f"{at.isoformat()}={price};".encode())
+        for at, listings, range_max in card.observations:
+            digest.update(f"{at.isoformat()}:{listings}:{range_max};".encode())
     for promo in promos:
         digest.update(repr(promo).encode())
     return digest.hexdigest()[:12]
@@ -167,6 +189,12 @@ def run_backtest(
 
         def run(p: engine.Params) -> list[engine.Trade]:
             return engine.simulate_dip(series, cache, p, end)
+
+    elif rule is sig.Rule.OVERPRICE_CHANCE:
+        cache = _dip_stats(series, start, end)  # same statistics, only the rule differs
+
+        def run(p: engine.Params) -> list[engine.Trade]:
+            return engine.simulate_uev(series, cache, p, end)
 
     else:
         # Decisions happen up to 7 days before a promo starts.

@@ -547,7 +547,9 @@ def _day(value: str | None, option: str) -> date | None:
 
 @app.command()
 def backtest(
-    rule: Annotated[str, typer.Option("--rule", help="BUY_DIP or PROMO_PREBUY.")] = "BUY_DIP",
+    rule: Annotated[
+        str, typer.Option("--rule", help="BUY_DIP, OVERPRICE_CHANCE or PROMO_PREBUY.")
+    ] = "BUY_DIP",
     first: Annotated[
         str | None, typer.Option("--from", help="First day (YYYY-MM-DD); default 30 days ago.")
     ] = None,
@@ -559,7 +561,7 @@ def backtest(
         typer.Option("--sweep", help="Parameter sweep, e.g. dip_pct=5,10,15,20."),
     ] = None,
     hold: Annotated[
-        float | None, typer.Option("--hold", help="BUY_DIP: max holding time in hours.", min=1)
+        float | None, typer.Option("--hold", help="Max holding time in hours (BUY_DIP, ÜV).", min=1)
     ] = None,
     card: Annotated[
         list[int] | None, typer.Option("--card", help="Only this EA id (repeatable).")

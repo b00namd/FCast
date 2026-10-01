@@ -308,3 +308,79 @@ def test_window_uses_local_days() -> None:
     assert start == datetime(2026, 8, 31, 22, 0, tzinfo=UTC)
     with pytest.raises(ValueError):
         bt.window(date(2026, 9, 30), date(2026, 9, 1), tz, now)
+
+
+# --- OVERPRICE_CHANCE (ÜV) ------------------------------------------------------------------
+
+
+def uev_card(after: list[int], thin: tuple[int, ...] = (100_000, 112_000)) -> CardSeries:
+    """A week rising 85k -> 100k with full supply, then thin supply at 100k, then `after`."""
+    prices = [round(85_000 + 15_000 * i / 167) for i in range(WEEK_H)] + [100_000] + after
+    points = tuple((T0 + i * HOUR, p) for i, p in enumerate(prices))
+    observations: list[engine.Observation] = []
+    for i, (at, price) in enumerate(points):
+        listings = thin if i == WEEK_H else (price,) * 5
+        observations.append((at, listings, 300_000))
+    return CardSeries(1, "Karte 1", points, observations=tuple(observations))
+
+
+def run_uev(series: list[CardSeries], params: Params = DEFAULT) -> list[Trade]:
+    end = series[0].points[-1][0]
+    return engine.simulate_uev(series, engine.dip_stats(series, T0, end), params, end)
+
+
+def test_uev_sells_once_the_market_reaches_the_listing() -> None:
+    # Two listings, 12 % gap: list at 111,000 (one step below the next listing).
+    trades = run_uev([uev_card([100_000, 112_000, 112_000])])
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.bought_at == T0 + WEEK_H * HOUR
+    assert trade.buy == 100_000
+    assert trade.sell == 111_000
+    assert trade.exit is Exit.TARGET
+    assert trade.sold_at == T0 + (WEEK_H + 2) * HOUR
+    assert trade.profit == 105_450 - 100_000
+    assert "2 Angebote" in trade.note
+
+
+def test_uev_without_buyers_is_sold_after_the_holding_period() -> None:
+    trades = run_uev([uev_card([100_000] * 30)], Params(max_hold_h=24))
+    assert [t.exit for t in trades] == [Exit.HOLD]
+    assert trades[0].sell == 99_500
+    assert trades[0].profit == 94_525 - 100_000
+
+
+def test_uev_needs_a_supply_observation_with_the_snapshot() -> None:
+    card = uev_card([100_000, 112_000])
+    assert run_uev([CardSeries(1, "X", card.points)]) == []  # no supply history
+    stale = card.observations[: WEEK_H - 8]  # last observation 8 h before the snapshot
+    assert run_uev([CardSeries(1, "X", card.points, observations=stale)]) == []
+    # A full order book (no gap) does not reach the ÜV threshold.
+    assert run_uev([uev_card([100_000, 112_000], thin=(100_000,) * 5)]) == []
+
+
+def test_uev_threshold_sweep() -> None:
+    series = [uev_card([100_000, 112_000])]
+    end = series[0].points[-1][0]
+    cache = engine.dip_stats(series, T0, end)
+    rows = engine.sweep(
+        lambda p: engine.simulate_uev(series, cache, p, end), DEFAULT, "uev_threshold", [60, 95]
+    )
+    assert [(r.value, r.metrics.trades) for r in rows] == [(60, 1), (95, 0)]
+
+
+def test_uev_backtest_from_database(factory: sessionmaker[Session]) -> None:
+    card = uev_card([100_000, 112_000, 112_000])
+    end = card.points[-1][0]
+    with factory.begin() as session:
+        player = repo.upsert_player(session, 1, repo.PlayerDetails(name="ÜV"))
+        for (at, price), (_, listings, range_max) in zip(
+            card.points, card.observations, strict=True
+        ):
+            repo.add_snapshot(session, player, Platform.PC, price, "futbin", at)
+            repo.record_market_state(
+                session, player, Platform.PC, "futbin", at, listings, 150, range_max
+            )
+        report = bt.run_backtest(session, settings(), Rule.OVERPRICE_CHANCE, T0, end)
+    assert [(t.buy, t.sell, t.exit) for t in report.trades] == [(100_000, 111_000, Exit.TARGET)]
+    assert report.metrics.total_profit == 5_450

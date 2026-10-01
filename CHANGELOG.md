@@ -4,6 +4,21 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Phase 9 – Betrieb & bessere Signale
+- **Abfrage-Takt pro Karte:** jede Runde, alle 2/6/12 h (Watchlist „Bearbeiten“ oder
+  `fcast watch interval <ea_id> <minuten>`); der Collector überspringt Karten, die noch nicht dran
+  sind, und zeigt das auf der Status-Seite. Neu: `fcast watch remove`.
+- **Tägliches Backup** um `FCAST_BACKUP_TIME` (03:30) per SQLite-Online-Backup, 14 Stück
+  aufbewahrt (`FCAST_BACKUP_KEEP`); im Docker-Setup auf dem Host unter `./backups`;
+  `fcast db backup` für sofort; Status-Seite zeigt das letzte Backup.
+- **Verlauf der Angebotslage** (`market_observations`): „weniger als 5 Angebote seit …“ im
+  Spielerdetail und in `fcast lage`; hält das dünne Angebot mindestens 6 h an, steigt der
+  ÜV-Score (bis +0,2 auf den Angebots-Anteil) und es steht als Grund dabei. Spielerdetail zeigt
+  jetzt auch die Gründe des ÜV-Scores.
+- **ÜV im Backtest** (`--rule OVERPRICE_CHANCE`): Kauf zum Marktpreis, Einstellen zum ÜV-Preis,
+  verkauft sobald das günstigste Angebot den ÜV-Preis erreicht; Sweep über `uev_threshold` u. a.
+- **ÜV-Chance mit Mindestprofit** wie beim Kauf-Dip (keine 12-Coins-Signale mehr).
+
 ### Behoben
 - **Holo-ÜV nur noch realistisch:** höchstens +150 % Abstand (`FCAST_HOLO_MAX_SPREAD_PCT`),
   normale Karte knapp (< 5 Angebote), mindestens 48 h Preisverlauf (`FCAST_HOLO_MIN_HISTORY_H`).
