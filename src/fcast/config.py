@@ -82,6 +82,8 @@ class Settings(BaseSettings):
     uev_weight_trend: float = Field(default=0.25, ge=0)
     uev_weight_headroom: float = Field(default=0.15, ge=0)
     uev_weight_liquidity: float = Field(default=0.20, ge=0)
+    # Strong cards (play value) are in demand: weight of the play value in the ÜV score.
+    uev_weight_meta: float = Field(default=0.10, ge=0)
     # Listing markup over the market price if the supply gap gives no better target.
     uev_min_markup_pct: float = Field(default=5.0, ge=0)
     # Suggested markup over the last known price for extinct cards.

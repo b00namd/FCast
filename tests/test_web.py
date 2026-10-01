@@ -1145,3 +1145,32 @@ def test_radar_page_lists_hits_and_fodder(client: TestClient, collector: Collect
     assert "Futter zieht an" in page
     assert "+20,0 %" in page
     assert 'name="radar"' in client.get("/alerts").text
+
+
+def test_player_page_shows_card_rating(client: TestClient, collector: Collector) -> None:
+    from fcast.sources.futbin import parse_player
+
+    html = (Path(__file__).parent / "fixtures" / "futbin" / "21487-maradona.html").read_text(
+        encoding="utf-8"
+    )
+    info = parse_player(html, 4711)
+    assert info.attributes is not None
+    with collector.session_factory.begin() as session:
+        player = repo.upsert_player(
+            session,
+            4711,
+            repo.PlayerDetails(
+                name="Maradona", position=info.position, attributes_raw=info.attributes.to_json()
+            ),
+        )
+        repo.set_watch(session, player)
+        repo.add_snapshot(session, player, Platform.PC, 5_000_000, "futbin", datetime.now(UTC))
+    page = client.get("/players/4711").text
+    assert "Kartenbewertung" in page
+    assert "Spielwert 90" in page
+    assert "Spielmacher" in page
+    assert "Technical+" in page
+    assert "AcceleRATE Explosive" in page
+    overview = client.get("/prices").text
+    assert "Spielwert" in overview
+    assert ">90<" in overview.replace(" ", "")

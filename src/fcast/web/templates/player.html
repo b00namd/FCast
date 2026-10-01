@@ -75,6 +75,30 @@
   </div>
 </div>
 
+<h3>Kartenbewertung</h3>
+{% set attrs = d.player.attributes %}
+{% if a.play %}
+  <p><strong>Spielwert {{ a.play.score | round | int }}</strong> / 100
+    <span class="muted">· {{ a.play.group }} · gewichteter Werte-Schnitt {{ a.play.base | string | replace(".", ",") }}</span>
+    <br><small class="muted">{{ a.play.reasons | join(" · ") }}</small></p>
+{% endif %}
+{% if attrs %}
+  {% set face = {"Pace": "TEM", "Shooting": "SCH", "Passing": "PAS", "Dribbling": "DRI", "Defending": "DEF", "Physical": "PHY", "Diving": "HEC", "Handling": "BAL", "Kicking": "ABS", "Reflexes": "REF", "Speed": "TEM", "Positioning": "STE"} %}
+  <p>
+    {% for key, short in face.items() if key in attrs.stats %}<span class="badge">{{ short }} {{ attrs.stats[key] }}</span> {% endfor %}
+    <br><small class="muted">
+      {% if attrs.skills %}{{ attrs.skills }}★ Skills · {% endif %}{% if attrs.weak_foot %}{{ attrs.weak_foot }}★ schwacher Fuß · {% endif %}
+      {% if attrs.height_cm %}{{ attrs.height_cm }} cm · {% endif %}{% if attrs.body_type %}{{ attrs.body_type }} · {% endif %}
+      {% if attrs.foot %}Fuß {{ attrs.foot }} · {% endif %}{% if attrs.accelerate %}AcceleRATE {{ attrs.accelerate }}{% endif %}
+    </small>
+    {% if attrs.playstyles %}<br>PlayStyles:
+      {% for p in attrs.playstyles %}<span class="badge {% if p in attrs.playstyles_plus %}good{% endif %}" {% if p in attrs.playstyles_plus %}title="PlayStyle+"{% endif %}>{{ p }}{% if p in attrs.playstyles_plus %}+{% endif %}</span> {% endfor %}
+    {% endif %}
+  </p>
+{% else %}
+  <p class="muted">Noch keine Kartenwerte – sie kommen mit der nächsten FUTBIN-Abfrage dieser Karte.</p>
+{% endif %}
+
 {% if a.holo_player %}
 <h3>Holo-Version</h3>
 <p>

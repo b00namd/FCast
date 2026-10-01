@@ -4,6 +4,23 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Phase 11 – Kartenbewertung
+- **Kartenwerte** von der FUTBIN-Spielerseite bei jeder Abfrage (keine Extra-Anfrage):
+  Haupt- und Einzelwerte, PlayStyles inkl. PlayStyle+, Skills, schwacher Fuß, Größe,
+  Körpertyp, starker Fuß, AcceleRATE (Spalte `players.attributes`, JSON).
+- **Spielwert 0–100** je Positionsgruppe (Sturm, Flügel, Spielmacher, Mittelfeld, Sechser,
+  Außen-/Innenverteidiger, Torwart): bis 80 Punkte aus gewichteten Werten, bis 20 aus passenden
+  PlayStyle+, Skills/schwachem Fuß, AcceleRATE Explosive (Angreifer) und Größe (Innenverteidiger).
+- **Meta-Score:** 80 % Spielwert + 20 % wie viel die Karte im Vergleich gespielt wird.
+- **Neues Radar-Signal „Unterbewertet“:** Spielwert ab 65 und mindestens 40 % unter dem Preis,
+  den ähnlich starke Karten üblicherweise kosten (log-lineare Preiskurve über alle bekannten
+  Karten ab 2.000 Coins).
+- **Im Scoring:** ÜV-Score (Gewicht `FCAST_UEV_WEIGHT_META` = 0,10), Promo-Vorkauf
+  (Faktor 0,8–1,2), Radar-Potenzial (bis +5) und Warnung beim Kauf-Dip unter Spielwert 40.
+- **Anzeige:** Abschnitt „Kartenbewertung“ im Spielerdetail, Spalte in Übersicht und Radar,
+  `fcast lage`; neuer Befehl `fcast cards` mit Abgleich Spielwert ↔ Spielzahl
+  (Rangkorrelation).
+
 ### Phase 10 – Potenzial-Radar
 - **Markt-Scanner:** liest alle 12 h FUTBIN Popular, New Players und das aktuelle TOTW
   (je bis `FCAST_RADAR_LIST_LIMIT` = 150 Karten), löst pro Lauf bis zu 5 neue Karten auf und

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from fcast.alerts.config import AlertConfig, load_alert_config, save_alert_config
 from fcast.alerts.notifier import Notification, NotifierError
+from fcast.analysis import cards
 from fcast.analysis import service as analysis
 from fcast.analysis import signals as sig
 from fcast.backtest import engine
@@ -708,6 +709,7 @@ def radar_page(request: Request) -> HTMLResponse:
             {
                 "nav": "radar",
                 "hits": radar_service.hits(session, settings, now),
+                "agreement": cards.agreement(cards.card_values(session, settings, now)),
                 "fodder": radar_service.fodder(session, settings, now),
                 "status": radar_service.status(session, settings, now),
                 "lists": RADAR_LISTS,

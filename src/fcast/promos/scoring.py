@@ -58,6 +58,7 @@ class CardInfo:
     club: str | None
     league: str | None
     nation: str | None
+    play: float | None = None  # play value 0-100, if known
 
 
 @dataclass
@@ -148,6 +149,10 @@ def score_card(
         return None
     score = 100 * strength * timing * promo.confidence * price_factor(stats)
     score *= liquidity_factor(stats)
+    if card.play is not None:  # strong cards profit more from a promo hype
+        score *= 0.8 + 0.4 * card.play / 100
+        if card.play >= 75:
+            reasons.append(f"starke Karte (Spielwert {card.play:.0f})")
     if stats is not None and stats.deviation_pct is not None and stats.deviation_pct < -5:
         reasons.append(f"{stats.deviation_pct:+.0f} % unter Ø 7 Tage".replace(".", ","))
     return PromoMatch(

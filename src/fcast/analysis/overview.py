@@ -46,6 +46,8 @@ class CardLine:
     gap_pct: float | None
     headroom_pct: float | None
     thin_hours: float | None  # supply below five listings for this long
+    play_value: float | None  # 0-100 from stats and PlayStyles
+    play_group: str | None
     uev_score: float | None
     holo_price: int | None
     holo_spread_pct: float | None
@@ -144,6 +146,8 @@ def card_lines(session: Session, settings: Settings, now: datetime) -> list[Card
                 gap_pct=a.supply_gap_pct,
                 headroom_pct=a.headroom_pct,
                 thin_hours=a.supply.thin_hours if a.supply else None,
+                play_value=a.play.score if a.play else None,
+                play_group=a.play.group if a.play else None,
                 uev_score=a.overprice.score if a.overprice else None,
                 holo_price=a.holo.price if a.holo else None,
                 holo_spread_pct=a.holo_spread_pct,

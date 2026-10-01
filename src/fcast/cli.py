@@ -725,6 +725,8 @@ def lage(
             )
             if c.thin_hours:
                 parts.append(f"dünn seit {c.thin_hours:.0f} h")
+        if c.play_value is not None:
+            parts.append(f"Spielwert {c.play_value:.0f} ({c.play_group})")
         if c.uev_score is not None:
             parts.append(f"ÜV {c.uev_score:.0f}")
         if c.holo_spread_pct is not None:
@@ -767,6 +769,54 @@ def lage(
         console.print(f"[bold]{title}[/bold]")
         for line in lines or ["-"]:
             console.print(f"  {line}", highlight=False)
+
+
+@app.command()
+def cards(
+    top: Annotated[int, typer.Option("--top", help="How many cards to list.")] = 25,
+    group: Annotated[
+        str | None, typer.Option("--group", help="Only one position group, e.g. Sturm.")
+    ] = None,
+) -> None:
+    """Play value of all known cards, the usual price for it and the check against usage."""
+    from fcast.analysis.cards import agreement, card_values, price_fit
+    from fcast.db.base import utcnow
+    from fcast.db.models import Player
+
+    settings = get_settings()
+    with _db_session() as session:
+        values = card_values(session, settings, utcnow())
+        names = {p.id: p.display_name for p in session.query(Player).filter(Player.id.in_(values))}
+    fit = price_fit(values)
+    corr, rated = agreement(values)
+    rows = sorted(
+        (v for v in values.values() if group is None or v.play.group == group),
+        key=lambda v: -v.meta,
+    )[:top]
+    table = Table(title=f"Spielwert ({len(values)} Karten mit Werten)")
+    for column in ("Karte", "Gruppe", "Spielwert", "Meta", "Preis", "Üblich", "Spiele"):
+        table.add_column(column, justify="left" if column in ("Karte", "Gruppe") else "right")
+    for v in rows:
+        usual = fit.expected(v.meta) if fit is not None else None
+        table.add_row(
+            names.get(v.player_id, str(v.player_id)),
+            v.play.group,
+            f"{v.play.score:.0f}",
+            f"{v.meta:.0f}",
+            format_coins(v.price),
+            format_coins(usual),
+            format_coins(v.games),
+        )
+    console.print(table)
+    if corr is None:
+        typer.echo(f"Zu wenige Karten mit Spielzahl für den Abgleich ({rated}).")
+    else:
+        typer.echo(
+            f"Spielwert vs. Spielzahl (Rangkorrelation): {corr:+.2f} bei {rated} Karten "
+            "(+1 = passt perfekt, 0 = kein Zusammenhang)".replace(".", ",")
+        )
+    if fit is None:
+        typer.echo("Noch zu wenige bepreiste Karten für den Preisvergleich.")
 
 
 alert_app = typer.Typer(help="Push alerts.", no_args_is_help=True)

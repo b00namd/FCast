@@ -13,6 +13,7 @@
       <th>Spieler</th>
       <th class="num">Preis</th>
       <th class="num">24 h</th>
+      <th class="num hide-sm" title="Spielwert 0–100 aus Werten und PlayStyles">Spielwert</th>
       <th class="hide-sm">Stand</th>
       <th class="num hide-sm">Kaufziel</th>
       <th class="num hide-sm">Verkaufsziel</th>
@@ -32,6 +33,7 @@
       </td>
       <td class="num">{% if row.latest %}{{ row.latest.price | coins }}{% else %}<span class="muted">kein Preis</span>{% endif %}</td>
       <td class="num {% if change is not none and change > 0 %}up{% elif change is not none and change < 0 %}down{% endif %}">{{ change | pct }}</td>
+      <td class="num hide-sm">{% if a and a.play %}{{ a.play.score | round | int }}{% else %}<span class="muted">–</span>{% endif %}</td>
       <td class="hide-sm nowrap">{% if row.latest %}{{ row.latest.captured_at | dt }} <small class="muted">{{ row.latest.source }}</small>{% else %}–{% endif %}</td>
       <td class="num hide-sm">{{ row.entry.target_buy | coins }}</td>
       <td class="num hide-sm">{{ row.entry.target_sell | coins }}</td>

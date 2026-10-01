@@ -1,12 +1,13 @@
 """Runs the analysis for cards from the database (used by dashboard, CLI and alerts)."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from fcast.analysis import signals as sig
 from fcast.analysis.market import effective_price, headroom_pct, supply_gap_pct
+from fcast.analysis.playvalue import PlayValue, play_value
 from fcast.analysis.stats import Point, PriceStats, hour_profile, price_stats, weekday_profile
 from fcast.config import Settings
 from fcast.db import repositories as repo
@@ -14,6 +15,7 @@ from fcast.db.models import MarketState, Player, WatchlistEntry
 from fcast.holo import holo_partner
 
 PROFILE_WINDOW = timedelta(days=30)
+WEAK_CARD = 40.0  # play value below which a dip gets a warning
 
 
 @dataclass
@@ -26,6 +28,7 @@ class CardAnalysis:
     overprice: sig.OverpriceScore | None
     effective_price: int | None = None  # market price after outlier dampening
     thin_from: datetime | None = None  # supply thin (< 5 listings) since
+    play: PlayValue | None = None  # how good the card is in the game
     holo_player: Player | None = None
     holo: sig.HoloQuote | None = None
     signals: list[sig.Signal] = field(default_factory=list)
@@ -115,10 +118,19 @@ def analyze_player(
 
     holo_player = holo_partner(session, player)
     holo = _holo_quote(session, holo_player, settings) if holo_player is not None else None
+    play = play_value(player.attributes, player.position)
+    play_score = play.score if play is not None else None
+    dip = sig.buy_dip(player.ea_id, name, stats, cfg)
+    if dip is not None and play_score is not None and play_score < WEAK_CARD:
+        # A weak card may not bounce back: say so instead of hiding the dip.
+        dip = replace(
+            dip,
+            reasons=(*dip.reasons, f"Achtung: spielerisch schwach (Spielwert {play_score:.0f})"),
+        )
     found = [
-        sig.buy_dip(player.ea_id, name, stats, cfg),
+        dip,
         sig.sell_target(player.ea_id, name, stats, entry.target_sell if entry else None),
-        sig.overprice_chance(player.ea_id, name, stats, supply, cfg),
+        sig.overprice_chance(player.ea_id, name, stats, supply, cfg, play_score),
         sig.holo_spread(player.ea_id, name, stats, holo, supply, cfg),
     ]
     return CardAnalysis(
@@ -127,8 +139,9 @@ def analyze_player(
         stats=stats,
         market=market,
         supply=supply,
-        overprice=sig.overprice_score(stats, supply, cfg),
+        overprice=sig.overprice_score(stats, supply, cfg, play_score),
         thin_from=thin_from,
+        play=play,
         holo_player=holo_player,
         holo=holo,
         effective_price=(

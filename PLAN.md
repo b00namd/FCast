@@ -168,13 +168,21 @@ stehen. (Portfolio/Verkaufs-Tracking hat der Nutzer bewusst zurückgestellt, sie
 
 ---
 
+## ✅ Phase 11 – Kartenbewertung (erledigt)
+> **Stand 01.10.2026:** Werte, PlayStyles (+), Skills, schwacher Fuß, Größe, Körpertyp und
+> AcceleRATE von der FUTBIN-Spielerseite (ohne Extra-Anfrage); Spielwert 0–100 je Positionsgruppe;
+> Meta-Score (Spielwert + tatsächliche Nutzung); Radar-Signal „Unterbewertet“; Spielwert im
+> ÜV-Score, Promo-Vorkauf, Radar-Potenzial und als Warnung beim Kauf-Dip. Die Gewichte sind
+> Startwerte – `fcast cards` prüft sie gegen die FUTBIN-Spielzahlen.
+
+---
+
 ## Später / Ideen-Backlog
 - **Portfolio & Profit** (zurückgestellt 01.10.2026; Import gespeicherter Web-App-Seiten per
   Strg+S wäre technisch möglich, Kaufpreise stehen nur in den Transferzielen): Käufe/Verkäufe erfassen, realisierter Profit nach Steuer,
   offene Positionen, Verkaufsempfehlung, Risiko-Limit
 - **SBC-Futter-Tracker** (bisher Phase 9): günstigste Preise je Rating-Stufe 82–90, Signal `FODDER_STOCK`
 - Sentiment-Signal (Reddit-Titel nach Spielernamen, Hype-Score)
-- Kartenbewertung (Stats, AcceleRATE, PlayStyles) als Faktor im Scoring
 - SBC-Lösungsrechner mit eigenem Club (Import per CSV, kein EA-Login)
 - Selbstlernende Gewichtung: Signale anhand ihrer Trefferquote aus dem Backtesting nachjustieren
 - Backup der SQLite-DB (Cronjob oder in bestehendes Backup-Konzept einhängen)

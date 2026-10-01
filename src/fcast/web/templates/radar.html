@@ -10,6 +10,8 @@
   Scanner: {{ status.universe }} Karten aus FUTBIN Popular, New Players und TOTW · {{ status.resolved }} erkannt ·
   {{ status.checked_recently }} in den letzten {{ settings.radar_interval_h | int }} h bepreist
   {% if status.universe_at %}· Listen zuletzt {{ status.universe_at | isodt }}{% endif %}
+  {% set corr, rated = agreement %}
+  {% if corr is not none %}· Spielwert ↔ Spielzahl: Übereinstimmung {{ corr | string | replace(".", ",") }} bei {{ rated }} Karten{% endif %}
   {% if settings.radar_per_run == 0 %}· <span class="down">Scanner ausgeschaltet (FCAST_RADAR_PER_RUN=0)</span>{% endif %}
 </small></p>
 
@@ -41,7 +43,7 @@
 {% else %}
 <div class="overflow-auto">
 <table>
-  <thead><tr><th>Karte</th><th class="hide-sm">Herkunft</th><th class="num">Preis</th><th>Signale</th><th class="num">Potenzial</th><th></th></tr></thead>
+  <thead><tr><th>Karte</th><th class="hide-sm">Herkunft</th><th class="num">Preis</th><th class="num hide-sm">Spielwert</th><th>Signale</th><th class="num">Potenzial</th><th></th></tr></thead>
   <tbody>
   {% for hit in hits %}
     <tr>
@@ -49,6 +51,7 @@
         {% if hit.player.card_type %}<br><small class="muted">{{ hit.player.card_type }}</small>{% endif %}</td>
       <td class="hide-sm">{% if hit.on_watchlist %}Watchlist{% else %}{{ lists.get(hit.list_name, hit.list_name or "–") }}{% endif %}</td>
       <td class="num">{{ hit.price | coins }}</td>
+      <td class="num hide-sm">{% if hit.value %}{{ hit.value.play.score | round | int }}{% else %}<span class="muted">–</span>{% endif %}</td>
       <td>
         {% for s in hit.signals %}
           <span class="badge {% if s.score >= 70 %}good{% else %}warn{% endif %}">{{ s.label }} {{ s.score | round | int }}</span>
@@ -79,6 +82,7 @@
     <li><strong>Trend-Start:</strong> Der Preis steigt seit mehreren Abfragen stetig (mind. {{ settings.radar_trend_min_pct | int }} % in 12 h, höchstens 30 % – danach ist der Sprung schon passiert).</li>
     <li><strong>Angebot schrumpft:</strong> Die Zahl der günstigen Angebote sinkt deutlich, während der Preis hält – Vorstufe zu ÜV oder extinct.</li>
     <li><strong>Nutzung steigt:</strong> Die Karte wird viel öfter gespielt als am Vortag und mehr als die typische Karte – Nachfrage kommt oft vor dem Preis.</li>
+    <li><strong>Unterbewertet:</strong> Spielwert ab 65, aber mindestens 40 % billiger als Karten mit ähnlichem Spielwert normalerweise kosten.</li>
     <li><strong>Futter zieht an:</strong> Die günstigsten Karten eines Ratings werden deutlich teurer – oft kündigt sich eine große SBC an.</li>
     <li>Potenzial = stärkstes Signal + 5 Punkte je weiterem Signal. Ab {{ settings.radar_alert_score | int }} kommt ein Push (höchstens einmal am Tag pro Karte).</li>
   </ul>

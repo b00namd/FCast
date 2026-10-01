@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from fcast.analysis.cards import CardValue, card_values, price_fit
 from fcast.analysis.stats import Point
 from fcast.collector.job import apply_player_info
 from fcast.config import Settings
@@ -206,10 +207,11 @@ class RadarHit:
     price: int | None
     futbin_ref: str | None
     signals: list[rs.RadarSignal] = field(default_factory=list)
+    value: CardValue | None = None  # play value, meta score
 
     @property
     def potential(self) -> float:
-        return rs.potential(self.signals)
+        return rs.potential(self.signals, self.value.meta if self.value else None)
 
 
 @dataclass
@@ -252,6 +254,8 @@ def hits(session: Session, settings: Settings, now: datetime) -> list[RadarHit]:
         ]
         usage[player.id] = rs.usage_rates(observed, now, cfg.usage_window_h)
     median = rs.cohort_median([current for current, _ in usage.values()])
+    values = card_values(session, settings, now)
+    fit = price_fit(values)
 
     found = []
     for player in players:
@@ -266,12 +270,20 @@ def hits(session: Session, settings: Settings, now: datetime) -> list[RadarHit]:
             )
         ]
         current, previous = usage[player.id]
+        value = values.get(player.id)
+        expected = fit.expected(value.meta) if fit is not None and value is not None else None
         signals = [
             s
             for s in (
                 rs.trend_start(points, now, cfg),
                 rs.supply_shrinking(observations, points, now, cfg),
                 rs.usage_surge(current, previous, median, cfg),
+                rs.undervalued(
+                    value.meta if value else None,
+                    value.price if value else None,
+                    expected,
+                    cfg,
+                ),
             )
             if s is not None
         ]
@@ -286,6 +298,7 @@ def hits(session: Session, settings: Settings, now: datetime) -> list[RadarHit]:
                 price=points[-1][1] if points else None,
                 futbin_ref=repo.get_source_ref(session, player.ea_id, FUTBIN),
                 signals=sorted(signals, key=lambda s: -s.score),
+                value=value,
             )
         )
     return sorted(found, key=lambda h: (-h.potential, h.player.display_name))

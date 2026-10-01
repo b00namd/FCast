@@ -364,3 +364,31 @@ def test_watch_interval_and_remove(db_path: Path) -> None:
     result = runner.invoke(app, ["watch", "remove", "231747"])
     assert result.exit_code == 0, result.output
     assert "Watchlist is empty" in runner.invoke(app, ["watch", "list"]).output
+
+
+def test_cards_command(db_path: Path) -> None:
+    from fcast.db import repositories as repo
+    from fcast.db.session import create_db_engine, create_session_factory
+    from fcast.sources.base import CardAttributes
+
+    assert runner.invoke(app, ["db", "upgrade"]).exit_code == 0
+    engine = create_db_engine(get_settings().db_url)
+    stats = {name: 85 for name in ("Acceleration", "Sprint Speed", "Finishing", "Att. Position")}
+    stats |= {name: 80 for name in ("Shot Power", "Composure", "Ball Control", "Agility")}
+    with create_session_factory(engine).begin() as session:
+        repo.upsert_player(
+            session,
+            9,
+            repo.PlayerDetails(
+                name="Stürmer",
+                rating=85,
+                position="ST",
+                attributes_raw=CardAttributes(stats=stats).to_json(),
+            ),
+        )
+    engine.dispose()
+    result = runner.invoke(app, ["cards"], env={"COLUMNS": "200"})
+    assert result.exit_code == 0, result.output
+    assert "Stürmer (85)" in result.output
+    assert "Sturm" in result.output
+    assert "Zu wenige Karten mit Spielzahl" in result.output

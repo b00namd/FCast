@@ -1,10 +1,22 @@
 """Card attributes from FUTBIN and the play value on top of them."""
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from sqlalchemy.orm import Session, sessionmaker
 
+from fcast.analysis import cards
 from fcast.analysis import playvalue as pv
+from fcast.analysis import signals as sig
+from fcast.analysis.service import analyze_player
+from fcast.analysis.stats import price_stats
+from fcast.config import Platform, Settings
+from fcast.db import repositories as repo
+from fcast.db.base import Base
+from fcast.db.session import create_db_engine, create_session_factory
+from fcast.promos.scoring import CardInfo, PromoInfo, PromoWeights, score_card
+from fcast.radar import signals as rs
 from fcast.sources.base import CardAttributes
 from fcast.sources.futbin import parse_attributes, parse_player
 
@@ -107,3 +119,108 @@ def test_meta_score_and_usage_agreement() -> None:
     opposite = [(float(v), float(-v)) for v in range(10)]
     assert pv.usage_agreement(opposite) == pytest.approx(-1.0)
     assert pv.usage_agreement(agreeing[:5]) is None
+
+
+# --- in the signals ------------------------------------------------------------------------------
+
+NOW = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
+CFG = sig.SignalConfig()
+
+
+def test_play_value_raises_the_uev_score() -> None:
+    points = [(NOW - timedelta(hours=h), 100_000 - 50 * h) for h in range(168)]
+    stats = price_stats(points, NOW)
+    supply = sig.Supply((100_000, 108_000), 300_000)
+    plain = sig.overprice_score(stats, supply, CFG)
+    strong = sig.overprice_score(stats, supply, CFG, play=90)
+    weak = sig.overprice_score(stats, supply, CFG, play=20)
+    assert plain is not None and strong is not None and weak is not None
+    assert strong.score > plain.score > weak.score
+    assert "starke Karte (Spielwert 90)" in strong.reasons
+
+
+def test_promo_link_scores_strong_cards_higher() -> None:
+    promo = PromoInfo(1, "Promo", NOW + timedelta(days=3), None, 0.9, (("club", "Arsenal"),))
+
+    def card(play: float | None) -> CardInfo:
+        return CardInfo(1, "X", None, "Arsenal", None, None, play=play)
+
+    weights = PromoWeights()
+    scores = [score_card(card(p), promo, None, NOW, weights) for p in (None, 90.0, 20.0)]
+    assert all(s is not None for s in scores)
+    neutral, strong, weak = (s.score for s in scores if s is not None)
+    assert strong > neutral > weak
+
+
+@pytest.fixture
+def factory() -> sessionmaker[Session]:
+    engine = create_db_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    return create_session_factory(engine)
+
+
+def settings() -> Settings:
+    return Settings(_env_file=None, platform="pc", sources="")
+
+
+def test_weak_card_dip_gets_a_warning(factory: sessionmaker[Session]) -> None:
+    weak = CardAttributes(stats={name: 60 for name in pv.WEIGHTS[pv.STRIKER]})
+    with factory.begin() as session:
+        player = repo.upsert_player(
+            session,
+            1,
+            repo.PlayerDetails(name="Schwach", position="ST", attributes_raw=weak.to_json()),
+        )
+        for hours in range(160, 0, -1):
+            at = NOW - timedelta(hours=hours)
+            repo.add_snapshot(session, player, Platform.PC, 10_000, "futbin", at)
+        repo.add_snapshot(session, player, Platform.PC, 8_000, "futbin", NOW)
+        result = analyze_player(session, player, settings(), NOW)
+    assert result.play is not None and result.play.score < 40
+    dip = next(s for s in result.signals if s.rule is sig.Rule.BUY_DIP)
+    assert any("spielerisch schwach" in r for r in dip.reasons)
+
+
+def test_undervalued_signal() -> None:
+    cfg = rs.RadarConfig()
+    signal = rs.undervalued(80, 15_000, 50_000, cfg)
+    assert signal is not None
+    assert signal.kind is rs.RadarKind.UNDERVALUED
+    assert "ähnlich starke Karten kosten ~50.000, diese 15.000 (-70,0 %)" in signal.reasons[0]
+    assert rs.undervalued(80, 40_000, 50_000, cfg) is None  # only 20 % cheaper
+    assert rs.undervalued(50, 5_000, 50_000, cfg) is None  # not a strong card
+    assert rs.undervalued(80, None, 50_000, cfg) is None
+    assert rs.potential([signal], meta=80) == round(signal.score + 5, 1)
+
+
+def test_price_fit_finds_what_quality_usually_costs(factory: sessionmaker[Session]) -> None:
+    # 20 strikers: price doubles every 10 play-value points; one strong card is cheap.
+    with factory.begin() as session:
+        for i in range(20):
+            level = 70 + i  # stat level -> play value rises with i
+            stats = {name: level for name in pv.WEIGHTS[pv.STRIKER]}
+            player = repo.upsert_player(
+                session,
+                100 + i,
+                repo.PlayerDetails(
+                    name=f"P{i}",
+                    position="ST",
+                    attributes_raw=CardAttributes(stats=stats).to_json(),
+                    games_used=1_000 * (i + 1),
+                ),
+            )
+            value = pv.play_value(CardAttributes(stats=stats), "ST")
+            assert value is not None
+            price = round(5_000 * 2 ** ((value.score - 30) / 10))
+            if i == 18:
+                price = 3_000  # the bargain
+            repo.add_snapshot(session, player, Platform.PC, price, "futbin", NOW)
+        values = cards.card_values(session, settings(), NOW)
+    fit = cards.price_fit(values)
+    assert fit is not None and fit.cards == 20
+    bargain = next(v for v in values.values() if v.price == 3_000)
+    expected = fit.expected(bargain.meta)
+    assert expected > 20_000
+    assert rs.undervalued(bargain.meta, bargain.price, expected, rs.RadarConfig()) is not None
+    corr, rated = cards.agreement(values)
+    assert rated == 20 and corr == pytest.approx(1.0)

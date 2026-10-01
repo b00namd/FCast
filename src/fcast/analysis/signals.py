@@ -74,6 +74,7 @@ class SignalConfig:
     uev_weight_trend: float = 0.25
     uev_weight_headroom: float = 0.15
     uev_weight_liquidity: float = 0.20
+    uev_weight_meta: float = 0.10
     uev_min_markup_pct: float = 5.0
     uev_extinct_markup_pct: float = 20.0
     holo_min_spread_pct: float = 30.0
@@ -197,7 +198,7 @@ class OverpriceScore:
 
 
 def overprice_score(
-    stats: PriceStats, supply: Supply | None, cfg: SignalConfig
+    stats: PriceStats, supply: Supply | None, cfg: SignalConfig, play: float | None = None
 ) -> OverpriceScore | None:
     """ÜV score 0-100: thin supply, rising price, room below EA's maximum, active market."""
     if stats.current is None:
@@ -238,13 +239,18 @@ def overprice_score(
 
     liquidity_part = min((stats.changes_per_day or 0) / 12, 1.0)
 
-    weights = (
+    weights: tuple[float, ...] = (
         cfg.uev_weight_supply,
         cfg.uev_weight_trend,
         cfg.uev_weight_headroom,
         cfg.uev_weight_liquidity,
     )
-    parts = (supply_part, trend_part, headroom_part, liquidity_part)
+    parts: tuple[float, ...] = (supply_part, trend_part, headroom_part, liquidity_part)
+    if play is not None:  # strong cards find buyers at a premium more easily
+        weights += (cfg.uev_weight_meta,)
+        parts += (play / 100,)
+        if play >= 75:
+            reasons.append(f"starke Karte (Spielwert {play:.0f})")
     total = sum(weights) or 1.0
     score = 100 * sum(w * p for w, p in zip(weights, parts, strict=True)) / total
     return OverpriceScore(
@@ -277,9 +283,14 @@ def overprice_listing_price(
 
 
 def overprice_chance(
-    ea_id: int, name: str, stats: PriceStats, supply: Supply | None, cfg: SignalConfig
+    ea_id: int,
+    name: str,
+    stats: PriceStats,
+    supply: Supply | None,
+    cfg: SignalConfig,
+    play: float | None = None,
 ) -> Signal | None:
-    result = overprice_score(stats, supply, cfg)
+    result = overprice_score(stats, supply, cfg, play)
     if result is None or result.score < cfg.uev_threshold or stats.current is None:
         return None
     target = overprice_listing_price(stats, supply, cfg)

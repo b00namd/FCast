@@ -27,6 +27,7 @@ class RadarKind(StrEnum):
     SUPPLY_SHRINKING = "SUPPLY_SHRINKING"
     USAGE_SURGE = "USAGE_SURGE"
     FODDER_RISE = "FODDER_RISE"
+    UNDERVALUED = "UNDERVALUED"
 
 
 LABELS = {
@@ -34,6 +35,7 @@ LABELS = {
     RadarKind.SUPPLY_SHRINKING: "Angebot schrumpft",
     RadarKind.USAGE_SURGE: "Nutzung steigt",
     RadarKind.FODDER_RISE: "Futter zieht an",
+    RadarKind.UNDERVALUED: "Unterbewertet",
 }
 
 
@@ -62,6 +64,8 @@ class RadarConfig:
     usage_accel: float = 1.5  # games per day now vs. the day before
     fodder_window_h: float = 24.0
     fodder_min_pct: float = 8.0
+    undervalued_min_meta: float = 65.0
+    undervalued_min_pct: float = 40.0  # at least this much below the usual price
     alert_score: float = 70.0
 
     @classmethod
@@ -229,9 +233,29 @@ def fodder_lines(
     return lines
 
 
-def potential(signals: Sequence[RadarSignal]) -> float:
-    """Strongest signal plus 5 points for each further one."""
+def undervalued(
+    meta: float | None, price: int | None, expected: int | None, cfg: RadarConfig
+) -> RadarSignal | None:
+    """A strong card that costs far less than cards of similar quality usually do."""
+    if meta is None or price is None or not expected or meta < cfg.undervalued_min_meta:
+        return None
+    discount = (expected - price) / expected * 100
+    if discount < cfg.undervalued_min_pct:
+        return None
+    return RadarSignal(
+        RadarKind.UNDERVALUED,
+        round(min(40 + 50 * min(discount / 70, 1.0), 100.0), 1),
+        (
+            f"Spielwert {meta:.0f}: ähnlich starke Karten kosten ~{_coins(expected)}, "
+            f"diese {_coins(price)} ({_pct(-discount)})",
+        ),
+    )
+
+
+def potential(signals: Sequence[RadarSignal], meta: float | None = None) -> float:
+    """Strongest signal, 5 points for each further one, up to 5 more for a strong card."""
     if not signals:
         return 0.0
     best = max(s.score for s in signals)
-    return round(min(best + 5 * (len(signals) - 1), 100.0), 1)
+    bonus = min(max((meta - 60) / 4, 0.0), 5.0) if meta is not None else 0.0
+    return round(min(best + 5 * (len(signals) - 1) + bonus, 100.0), 1)

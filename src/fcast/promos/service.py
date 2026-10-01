@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, sessionmaker
 
 from fcast.analysis import signals as sig
+from fcast.analysis.playvalue import play_value
 from fcast.analysis.stats import price_stats
 from fcast.collector.job import apply_player_info
 from fcast.config import Settings
@@ -213,6 +214,11 @@ class Candidate:
     on_watchlist: bool
 
 
+def _play(player: Player) -> float | None:
+    value = play_value(player.attributes, player.position)
+    return value.score if value is not None else None
+
+
 def candidates(session: Session, settings: Settings, now: datetime) -> list[Candidate]:
     promos = active_promos(session, now)
     if not promos:
@@ -241,6 +247,7 @@ def candidates(session: Session, settings: Settings, now: datetime) -> list[Cand
                     club=player.club,
                     league=player.league,
                     nation=player.nation,
+                    play=_play(player),
                 ),
                 stats,
             )
