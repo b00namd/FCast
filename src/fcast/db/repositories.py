@@ -443,6 +443,12 @@ def list_positions(
     return session.scalars(stmt.order_by(PortfolioPosition.bought_at, PortfolioPosition.id)).all()
 
 
+def remove_position(session: Session, position: PortfolioPosition) -> None:
+    """Delete a position that was entered by mistake."""
+    session.delete(position)
+    session.flush()
+
+
 # --- promos ----------------------------------------------------------------
 
 

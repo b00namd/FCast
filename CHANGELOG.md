@@ -12,6 +12,16 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   eingebetteten Kartendaten). Der Collector wertet das wie „extinct“ als Antwort: kein Fehler,
   keine Ersatzanfrage bei FUTNext, eigener Zähler „nicht handelbar“ im Status.
 
+### Phase 12 – Portfolio & Verkaufs-Tracking
+- **Käufe und Verkäufe erfassen:** `fcast portfolio buy <ea-id> <preis>`, `listed <id> <preis>`,
+  `sell <id> <preis>`, `rm <id>` und `list` (mit `--all` auch die verkauften Positionen).
+- **Gewinn nach EA-Steuer:** `buy` nennt sofort den Break-even-Verkaufspreis, `sell` den Gewinn
+  bzw. Verlust; `list` zeigt je Position den Break-even und summiert realisierten Gewinn und
+  gebundenes Kapital. Gerechnet wird mit `analysis.pricing` (5 % Steuer, gültige Preisstufen).
+- Im Repository fehlte nur `remove_position`; die übrigen Portfolio-Funktionen gab es bereits.
+- Dashboard und Backtest bleiben unberührt – der Backtest spielt weiterhin Regeln auf den
+  gespeicherten Marktpreisen nach, unabhängig von den eigenen Positionen.
+
 ### Phase 11 – Kartenbewertung
 - **Behoben (01.10.):** „Unterbewertet“ feuerte direkt nach dem Start 8 Pushes auf Basis eines
   noch unbestätigten Spielwerts und einer Preiskurve aus 18 Karten (höheres Rating = billiger).

@@ -26,10 +26,12 @@ db_app = typer.Typer(help="Database maintenance.", no_args_is_help=True)
 watch_app = typer.Typer(help="Manage the watchlist.", no_args_is_help=True)
 prices_app = typer.Typer(help="Price data.", no_args_is_help=True)
 sources_app = typer.Typer(help="Price source health.", no_args_is_help=True)
+portfolio_app = typer.Typer(help="Purchases, sales and profit.", no_args_is_help=True)
 app.add_typer(db_app, name="db")
 app.add_typer(watch_app, name="watch")
 app.add_typer(prices_app, name="prices")
 app.add_typer(sources_app, name="sources")
+app.add_typer(portfolio_app, name="portfolio")
 
 console = Console()
 
@@ -967,3 +969,141 @@ def promo_list() -> None:
                 ", ".join(f"{link.link_type.value}:{link.link_value}" for link in p.links),
             )
         console.print(table)
+
+
+@portfolio_app.command("buy")
+def portfolio_buy(
+    ea_id: Annotated[int, typer.Argument(help="EA card id.", min=1)],
+    price: Annotated[int, typer.Argument(help="Price paid, in coins.", min=1)],
+) -> None:
+    """Record a purchase."""
+    from fcast.analysis.pricing import break_even_sell_price
+    from fcast.db import repositories as repo
+
+    with _db_session() as session:
+        player = repo.get_player_by_ea_id(session, ea_id)
+        if player is None:
+            raise typer.BadParameter(
+                f"card {ea_id} is unknown - add it with `fcast watch add {ea_id}` first"
+            )
+        position = repo.open_position(session, player, price)
+        target = break_even_sell_price(price)
+        typer.echo(
+            f"#{position.id} {player.display_name}: bought for {format_coins(price)}. "
+            f"Sell at {format_coins(target)} or more to break even after the 5 % tax."
+        )
+
+
+@portfolio_app.command("listed")
+def portfolio_listed(
+    position_id: Annotated[int, typer.Argument(help="Position id.", min=1)],
+    price: Annotated[int, typer.Argument(help="Asking price, in coins.", min=1)],
+) -> None:
+    """Note the price a held card is currently listed at."""
+    from fcast.db import repositories as repo
+
+    with _db_session() as session:
+        try:
+            position = repo.get_position(session, position_id)
+            repo.mark_listed(session, position, price)
+        except (repo.NotFoundError, repo.InvalidStateError) as exc:
+            typer.secho(f"Error: {exc}.", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from exc
+        typer.echo(
+            f"#{position.id} {position.player.display_name}: listed at {format_coins(price)}."
+        )
+
+
+@portfolio_app.command("sell")
+def portfolio_sell(
+    position_id: Annotated[int, typer.Argument(help="Position id.", min=1)],
+    price: Annotated[int, typer.Argument(help="Price the card sold for, in coins.", min=1)],
+) -> None:
+    """Record a sale and show the profit after the EA tax."""
+    from fcast.analysis.pricing import profit as net_profit
+    from fcast.db import repositories as repo
+
+    with _db_session() as session:
+        try:
+            position = repo.get_position(session, position_id)
+            name = position.player.display_name
+            buy_price = position.buy_price
+            repo.sell_position(session, position, price)
+        except (repo.NotFoundError, repo.InvalidStateError) as exc:
+            typer.secho(f"Error: {exc}.", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from exc
+        gain = net_profit(buy_price, price)
+        verdict = "profit" if gain >= 0 else "loss"
+        typer.echo(
+            f"#{position_id} {name}: {format_coins(buy_price)} -> {format_coins(price)} "
+            f"= {format_coins(gain)} {verdict} after tax."
+        )
+
+
+@portfolio_app.command("rm")
+def portfolio_rm(
+    position_id: Annotated[int, typer.Argument(help="Position id.", min=1)],
+) -> None:
+    """Delete a position that was entered by mistake."""
+    from fcast.db import repositories as repo
+
+    with _db_session() as session:
+        try:
+            position = repo.get_position(session, position_id)
+        except repo.NotFoundError as exc:
+            typer.secho(f"Error: {exc}.", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from exc
+        name = position.player.display_name
+        repo.remove_position(session, position)
+        typer.echo(f"Removed position #{position_id} ({name}).")
+
+
+@portfolio_app.command("list")
+def portfolio_list(
+    show_all: Annotated[bool, typer.Option("--all", "-a", help="Include sold positions.")] = False,
+) -> None:
+    """Open positions, realised profit and the capital currently tied up."""
+    from fcast.analysis.pricing import break_even_sell_price
+    from fcast.analysis.pricing import profit as net_profit
+    from fcast.db import repositories as repo
+    from fcast.db.models import PositionStatus
+
+    open_states = [PositionStatus.HOLDING, PositionStatus.LISTED]
+    with _db_session() as session:
+        positions = repo.list_positions(session, None if show_all else open_states)
+        if not positions:
+            typer.echo("No positions yet - record one with `fcast portfolio buy`.")
+            return
+
+        table = Table(title="Portfolio")
+        table.add_column("#", justify="right")
+        table.add_column("Card")
+        table.add_column("Buy", justify="right")
+        table.add_column("Status")
+        table.add_column("Sell", justify="right")
+        table.add_column("Break-even", justify="right")
+        table.add_column("Profit", justify="right")
+
+        realised = 0
+        tied_up = 0
+        for position in positions:
+            if position.status is PositionStatus.SOLD and position.sell_price is not None:
+                gain = net_profit(position.buy_price, position.sell_price)
+                realised += gain
+                profit_text = format_coins(gain)
+            else:
+                tied_up += position.buy_price
+                profit_text = "-"
+            table.add_row(
+                str(position.id),
+                position.player.display_name,
+                format_coins(position.buy_price),
+                position.status.value,
+                format_coins(position.sell_price),
+                format_coins(break_even_sell_price(position.buy_price)),
+                profit_text,
+            )
+        console.print(table)
+        typer.echo(
+            f"Realised profit: {format_coins(realised)} - capital tied up: {format_coins(tied_up)}"
+        )
