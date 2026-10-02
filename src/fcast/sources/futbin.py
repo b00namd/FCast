@@ -26,6 +26,7 @@ from fcast.sources.base import (
     PriceQuote,
     PriceSource,
     SourceError,
+    UntradeableError,
 )
 from fcast.sources.http import PoliteHttpClient
 
@@ -108,11 +109,16 @@ class FutbinPrice:
 def parse_price(html: str, platform: Platform, now: datetime | None = None) -> FutbinPrice:
     """Lowest BINs, EA price range and update time for a platform.
 
-    Raises `ExtinctError` (with the price range) when no listing exists.
+    Raises `ExtinctError` (with the price range) when no listing exists and
+    `UntradeableError` for SBC and objective rewards, which have no market box at all.
     """
     now = now or utcnow()
     tree = HTMLParser(html)
     box = _price_box(tree, platform)
+    kind = box.css_first("[data-price-box-types]")
+    box_type = (kind.attributes.get("data-price-box-types") or "") if kind is not None else ""
+    if box_type and box_type != "MARKET":
+        raise UntradeableError(f"no {platform} market price ({box_type.lower()} card)")
     first = box.css_first(".lowest-price-1")
     if first is None:
         raise FutbinFormatError(f"no {platform} price element found")

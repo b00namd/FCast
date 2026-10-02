@@ -21,6 +21,7 @@ from fcast.sources.base import (
     PriceQuote,
     PriceSource,
     SourceBlockedError,
+    UntradeableError,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ class CollectResult:
     deferred: int = 0  # watchlist cards skipped because their interval has not passed
     missing: list[int] = field(default_factory=list)
     extinct: list[int] = field(default_factory=list)
+    untradeable: list[int] = field(default_factory=list)  # SBC/objective rewards
     errors: dict[str, list[str]] = field(default_factory=dict)
     # Sources that started refusing us during this run, with the reason.
     paused: dict[str, str] = field(default_factory=dict)
@@ -108,6 +110,7 @@ class MarketObservation:
 class PlayerFetch:
     quotes: list[PriceQuote] = field(default_factory=list)
     markets: list[MarketObservation] = field(default_factory=list)
+    untradeable_by: set[str] = field(default_factory=set)
 
     @property
     def extinct(self) -> bool:
@@ -115,8 +118,10 @@ class PlayerFetch:
 
     @property
     def answered_by(self) -> set[str]:
-        """Sources that delivered a price or a market picture for this card."""
-        return {q.source for q in self.quotes} | {m.source for m in self.markets}
+        """Sources that delivered a price, a market picture or "untradeable" for this card."""
+        return (
+            {q.source for q in self.quotes} | {m.source for m in self.markets} | self.untradeable_by
+        )
 
 
 def _dampen_outlier(quote: PriceQuote, outlier_gap_pct: float) -> PriceQuote:
@@ -142,7 +147,7 @@ async def _collect_quotes(
     """Every local source is read; of the remote sources only the first one with an answer.
 
     A remote source reporting "extinct" is an answer too: the fallback would only return a
-    stale price, so it is not asked.
+    stale price, so it is not asked. The same goes for "untradeable" (SBC/objective rewards).
     """
     fetch = PlayerFetch()
     have_remote = False
@@ -161,6 +166,11 @@ async def _collect_quotes(
         except ExtinctError as exc:
             logger.info("%s: %s reports no listings (extinct)", ea_id, source.name)
             fetch.markets.append(MarketObservation(source.name, utcnow(), exc.market))
+            have_remote = have_remote or source.remote
+            result.succeeded.add(source.name)
+        except UntradeableError as exc:
+            logger.debug("%s: %s reports %s", ea_id, source.name, exc)
+            fetch.untradeable_by.add(source.name)
             have_remote = have_remote or source.remote
             result.succeeded.add(source.name)
         except PlayerNotFoundError as exc:
@@ -263,6 +273,8 @@ async def collect_once(
         info = await _first_player_info(detail_sources, ea_id, result)
         if fetch.extinct:
             result.extinct.append(ea_id)
+        elif fetch.untradeable_by and not fetch.quotes:
+            result.untradeable.append(ea_id)
         elif not fetch.quotes:
             result.missing.append(ea_id)
         # One short transaction per player: a failure only affects that player.
@@ -304,12 +316,13 @@ async def collect_once(
         logger.exception("saving source status failed")
     logger.info(
         "collect run: %d players (%d not due), %d stored, %d unchanged, %d extinct, "
-        "%d without price, %d errors%s",
+        "%d untradeable, %d without price, %d errors%s",
         result.players,
         result.deferred,
         result.stored,
         result.unchanged,
         len(result.extinct),
+        len(result.untradeable),
         len(result.missing),
         result.error_count,
         f", paused: {', '.join(result.paused)}" if result.paused else "",

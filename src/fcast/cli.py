@@ -315,6 +315,7 @@ def collect(
         typer.echo(
             f"{result.players} players: {result.stored} new snapshots, "
             f"{result.unchanged} unchanged, {len(result.extinct)} extinct, "
+            f"{len(result.untradeable)} untradeable, "
             f"{len(result.missing)} without price"
         )
         for source, reason in result.paused.items():

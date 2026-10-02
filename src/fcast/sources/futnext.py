@@ -23,6 +23,7 @@ from fcast.sources.base import (
     PriceQuote,
     PriceSource,
     SourceError,
+    UntradeableError,
 )
 from fcast.sources.http import PoliteHttpClient
 
@@ -34,6 +35,7 @@ _PLATFORM_LABELS = {Platform.CONSOLE: "PS / XB", Platform.PC: "PC"}
 _PRICE_RE = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s*([KkMm]?)\s*$")
 _TITLE_RE = re.compile(r"^(?P<name>.+?)\s+(?P<rating>\d{2,3})\s+(?P<type>.+?)\s+—\s+Price")
 _MULTIPLIERS = {"": 1, "k": 1_000, "m": 1_000_000}
+_NO_MARKET_PRICE = '\\"price\\":null'  # inside the JSON-in-JS page data, quotes are escaped
 
 
 class FutnextFormatError(SourceError):
@@ -80,6 +82,9 @@ def parse_price(html: str, platform: Platform) -> int:
                     raise NoPriceError(f"no {platform} price listed")
                 return price
         raise NoPriceError(f"no {platform} price listed")
+    # SBC and objective rewards have no price block; the embedded card data says so.
+    if _NO_MARKET_PRICE in html:
+        raise UntradeableError(f"no {platform} market price (untradeable card)")
     raise FutnextFormatError("no price element found")
 
 

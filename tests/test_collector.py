@@ -29,6 +29,7 @@ from fcast.sources.base import (
     PriceSource,
     SourceBlockedError,
     SourceError,
+    UntradeableError,
 )
 
 T0 = datetime(2026, 9, 29, 16, 0, tzinfo=UTC)
@@ -420,6 +421,28 @@ async def test_extinct_stops_fallback_and_is_tracked(factory: sessionmaker[Sessi
     state = market_state(factory, 1)
     assert state is not None
     assert state.extinct_since is None
+
+
+class UntradeableSource(FakeSource):
+    """Remote source that recognizes SBC/objective rewards like FUTBIN."""
+
+    async def fetch_price(self, ea_id: int, platform: Platform) -> PriceQuote:
+        self.calls.append(ea_id)
+        raise UntradeableError("sbc card")
+
+
+async def test_untradeable_stops_fallback_without_error(factory: sessionmaker[Session]) -> None:
+    watch(factory, 1)
+    primary = UntradeableSource("primary", remote=True)
+    fallback = FakeSource("fallback", prices={1: 50_000}, remote=True)
+
+    result = await collect_once(factory, [primary, fallback], Platform.PC)
+
+    assert result.untradeable == [1]
+    assert result.missing == []
+    assert result.errors == {}
+    assert fallback.calls == []
+    assert snapshots(factory) == []
 
 
 async def test_extra_cards_are_collected_like_watchlist_cards(

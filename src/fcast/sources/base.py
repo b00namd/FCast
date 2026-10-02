@@ -58,6 +58,10 @@ class NoPriceError(PlayerNotFoundError):
     """The card exists but no price is listed (e.g. untradeable or extinct)."""
 
 
+class UntradeableError(NoPriceError):
+    """SBC or objective reward: the card never appears on the transfer market."""
+
+
 class ExtinctError(NoPriceError):
     """No listings at all. Carries the market info so the collector can record it."""
 

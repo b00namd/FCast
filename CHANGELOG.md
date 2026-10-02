@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 
 ## [Unreleased]
 
+### Behoben
+- **SBC- und Objective-Karten (02.10.)** erzeugten bei jedem Sammellauf je Karte zwei
+  Warnungen („no price element found“) und setzten FUTBIN/FUTNext auf Fehler, weil die Seiten
+  statt eines Marktpreises nur die SBC-Kosten bzw. das Objective zeigen. Beide Parser erkennen
+  diese Karten jetzt (`UntradeableError`; FUTBIN über `data-price-box-types`, FUTNext über die
+  eingebetteten Kartendaten). Der Collector wertet das wie „extinct“ als Antwort: kein Fehler,
+  keine Ersatzanfrage bei FUTNext, eigener Zähler „nicht handelbar“ im Status.
+
 ### Phase 11 – Kartenbewertung
 - **Behoben (01.10.):** „Unterbewertet“ feuerte direkt nach dem Start 8 Pushes auf Basis eines
   noch unbestätigten Spielwerts und einer Preiskurve aus 18 Karten (höheres Rating = billiger).

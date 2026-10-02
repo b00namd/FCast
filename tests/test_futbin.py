@@ -7,7 +7,7 @@ import httpx
 import pytest
 
 from fcast.config import Platform
-from fcast.sources.base import ExtinctError, NoPriceError, PlayerNotFoundError
+from fcast.sources.base import ExtinctError, NoPriceError, PlayerNotFoundError, UntradeableError
 from fcast.sources.futbin import (
     FutbinFormatError,
     FutbinSource,
@@ -84,6 +84,14 @@ def test_multiple_listings_are_sorted() -> None:
     parsed = parse_price(html, Platform.CONSOLE, now=NOW)
     assert parsed.market.listings == (8_150_000, 9_000_000)
     assert parsed.price == 8_150_000
+
+
+@pytest.mark.parametrize("fixture", ["21758-adeyemi-objective.html", "23101-olise-sbc.html"])
+@pytest.mark.parametrize("platform", list(Platform))
+def test_sbc_and_objective_cards_are_untradeable(fixture: str, platform: Platform) -> None:
+    html = (FIXTURES / fixture).read_text(encoding="utf-8")
+    with pytest.raises(UntradeableError):
+        parse_price(html, platform, now=NOW)
 
 
 def test_changed_layout_is_reported() -> None:

@@ -43,7 +43,7 @@ DISCOVERY_PREFIX = "futbin.lookup."
 
 def failed_players(result: CollectResult) -> int | None:
     """Number of cards if a run produced no price at all because sources failed."""
-    got_data = result.stored or result.unchanged or result.extinct
+    got_data = result.stored or result.unchanged or result.extinct or result.untradeable
     if result.players and not got_data and (result.errors or result.paused or result.skipped):
         return result.players
     return None

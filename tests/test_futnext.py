@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from fcast.config import Platform
-from fcast.sources.base import NoPriceError
+from fcast.sources.base import NoPriceError, UntradeableError
 from fcast.sources.futnext import (
     FutnextFormatError,
     FutnextSource,
@@ -57,6 +57,13 @@ def test_wrong_platform_page_is_rejected() -> None:
 def test_zero_price_means_no_price() -> None:
     with pytest.raises(NoPriceError):
         parse_price(PC.replace(">4.99M<", ">0<"), Platform.PC)
+
+
+@pytest.mark.parametrize("fixture", ["50583500-objective-pc.html", "84133907-sbc-pc.html"])
+def test_sbc_and_objective_cards_are_untradeable(fixture: str) -> None:
+    html = (FIXTURES / fixture).read_text(encoding="utf-8")
+    with pytest.raises(UntradeableError):
+        parse_price(html, Platform.PC)
 
 
 def test_changed_layout_is_reported() -> None:
