@@ -31,3 +31,6 @@ import/
 
 # Database backups (server: ~/fcast/backups)
 backups/
+
+# Nextcloud sync conflicts
+*(conflicted copy*)*

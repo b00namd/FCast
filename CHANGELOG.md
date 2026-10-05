@@ -11,6 +11,9 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   diese Karten jetzt (`UntradeableError`; FUTBIN über `data-price-box-types`, FUTNext über die
   eingebetteten Kartendaten). Der Collector wertet das wie „extinct“ als Antwort: kein Fehler,
   keine Ersatzanfrage bei FUTNext, eigener Zähler „nicht handelbar“ im Status.
+- **ÜV-Einkaufsliste (05.10.):** „Max. Kauf“ war Marktpreis + Aufschlag ohne Rundung und damit
+  oft kein gültiger Preis (9.800 + 500 = 10.300). Jetzt auf die Preisstufe abgerundet (10.250),
+  der Break-even wird aus dem gerundeten Wert berechnet.
 
 ### Geändert
 - **Marktpreis je offener Position** im Portfolio: neue Spalten „Markt“ und „Jetzt“ – was ein
@@ -24,7 +27,7 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   gesetztem Passwort bleibt alles wie bisher. Gedacht für den Betrieb rein im Heimnetz; der
   Schutz gegen Cross-Site-Posts (`SameOriginMiddleware`) bleibt in beiden Fällen aktiv.
 
-### Phase 14 – Dashboard: ÜV und Portfolio
+### Dashboard: ÜV und Portfolio (zu Phase 12 und 13)
 - **Seite „ÜV"** (`/uev`): die Einkaufsliste aus Phase 13 im Browser, nach Bewertung gruppiert,
   mit Filtern für Bewertung, Höchstpreis, Aufschlag und Anzahl je Bewertung. Neu dabei: der
   **meistgenutzte Chemie-Stil** je Karte (aus `players.chem_style`) als farbiger Chip – damit
