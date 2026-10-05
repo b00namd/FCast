@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 if TYPE_CHECKING:
     from fcast.db.models import Player
     from fcast.portfolio.entries import Booking, Entry, Result
+    from fcast.portfolio.summary import Capital, ProfitReport
 
 from fcast import __version__
 from fcast.config import get_settings
@@ -995,11 +996,17 @@ def _book(entries: "list[Entry]", coins: int | None = None, write: bool = True) 
         )
 
     async def run(session: Session) -> "Booking":
+        from fcast.portfolio.summary import capital, profit_report
+
+        now = utcnow()
         try:
-            return await booking_service.book(session, entries, utcnow(), coins, source)
+            booking = await booking_service.book(session, entries, now, coins, source)
         finally:
             if source is not None:
                 await source.aclose()
+        booking.profit = profit_report(session, settings.tz, now)
+        booking.capital = capital(session, settings)
+        return booking
 
     try:
         with _db_session() as session:
@@ -1037,6 +1044,31 @@ def _print_booking(booking: "Booking", written: bool) -> None:
             f"Coin balance: {format_coins(booking.balance_before)} -> "
             f"{format_coins(booking.balance_after)}"
         )
+    if booking.profit is not None:
+        typer.echo(_profit_line(booking.profit))
+    if booking.capital is not None:
+        typer.echo(_capital_line(booking.capital))
+
+
+def _capital_line(capital: "Capital") -> str:
+    line = f"Capital tied up in {capital.positions} open positions: {format_coins(capital.tied_up)}"
+    if capital.unknown_buy:
+        line += f" (+{capital.unknown_buy} without buy price)"
+    line += f" - worth {format_coins(capital.market_value)} at market after tax"
+    if capital.without_market:
+        line += f" ({capital.without_market} without market price)"
+    return line
+
+
+def _profit_line(report: "ProfitReport") -> str:
+    line = (
+        f"Profit after tax - today: {format_coins(report.today.profit)}, "
+        f"this week: {format_coins(report.week.profit)}, "
+        f"total: {format_coins(report.total.profit)}"
+    )
+    if report.total.unknown:
+        line += f" ({report.total.unknown} sales without buy price not counted)"
+    return line
 
 
 def _position_or_card(ref: str) -> tuple[str | None, int | None]:
@@ -1201,6 +1233,7 @@ def portfolio_list(
     show_all: Annotated[bool, typer.Option("--all", "-a", help="Include sold positions.")] = False,
 ) -> None:
     """Open positions, listings, realised profit and the capital currently tied up."""
+    from fcast.db.base import utcnow
     from fcast.portfolio import coins as wallet
     from fcast.portfolio import summary as portfolio_summary
 
@@ -1239,6 +1272,40 @@ def portfolio_list(
             f"{format_coins(summary.tied_up)}"
             + (f" - coin balance: {format_coins(balance.coins)}" if balance else "")
         )
+        settings = get_settings()
+        typer.echo(_profit_line(portfolio_summary.profit_report(session, settings.tz, utcnow())))
+        typer.echo(_capital_line(portfolio_summary.capital(session, settings)))
+
+
+@portfolio_app.command("profit")
+def portfolio_profit() -> None:
+    """Realised profit after tax per day and week (Monday to Sunday) and in total."""
+    from fcast.db.base import utcnow
+    from fcast.portfolio.summary import capital, profit_report
+
+    settings = get_settings()
+    with _db_session() as session:
+        report = profit_report(session, settings.tz, utcnow())
+        tied_up = capital(session, settings)
+    typer.echo(_profit_line(report))
+    typer.echo(_capital_line(tied_up))
+    for title, periods, fmt in (
+        ("Days", report.days, "%a %d.%m."),
+        ("Weeks (from Monday)", report.weeks, "KW %V, %d.%m."),
+    ):
+        if not periods:
+            continue
+        table = Table(title=title)
+        for column in ("Period", "Profit", "Sales", "Without buy price"):
+            table.add_column(column, justify="left" if column == "Period" else "right")
+        for period in periods:
+            table.add_row(
+                period.start.strftime(fmt),
+                format_coins(period.profit),
+                str(period.sales),
+                str(period.unknown or ""),
+            )
+        console.print(table)
 
 
 @app.command()

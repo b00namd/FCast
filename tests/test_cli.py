@@ -536,3 +536,23 @@ def test_portfolio_apply_writes_nothing_on_errors(db_path: Path) -> None:
 
     bad = runner.invoke(app, ["portfolio", "apply", "-"], input="{not json")
     assert bad.exit_code == 1
+
+
+def test_portfolio_profit_command(db_path: Path) -> None:
+    _seed_cards()
+    wide = {"COLUMNS": "200"}
+    assert "today: 0" in runner.invoke(app, ["portfolio", "profit"], env=wide).output
+
+    runner.invoke(app, ["portfolio", "buy", "Musiala 87", "45000"])
+    sold = runner.invoke(app, ["portfolio", "sell", "Musiala 87", "50000"], env=wide)
+    assert "today: 2.500" in sold.output  # 47.500 after tax minus 45.000
+
+    result = runner.invoke(app, ["portfolio", "profit"], env=wide)
+    assert result.exit_code == 0, result.output
+    assert "this week: 2.500, total: 2.500" in result.output
+    assert "Days" in result.output and "Weeks" in result.output
+    assert "today: 2.500" in runner.invoke(app, ["portfolio", "list", "--all"], env=wide).output
+
+    runner.invoke(app, ["portfolio", "buy", "Wirtz 86", "30000"])
+    result = runner.invoke(app, ["portfolio", "profit"], env=wide)
+    assert "Capital tied up in 1 open positions: 30.000" in result.output

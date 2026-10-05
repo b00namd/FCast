@@ -40,6 +40,49 @@
   <span class="{% if unrealised > 0 %}up{% elif unrealised < 0 %}down{% endif %}">{{ unrealised | coins }}</span>{% endif %}
 </p>
 
+<article class="profit">
+  <header><strong>Gewinn nach Steuer</strong></header>
+  <div class="grid">
+    {% for label, period in (("Heute", profit.today), ("Diese Woche", profit.week), ("Gesamt", profit.total)) %}
+    <div>
+      <small class="muted">{{ label }}</small><br>
+      <strong class="{% if period.profit > 0 %}up{% elif period.profit < 0 %}down{% endif %}">{{ period.profit | coins }}</strong>
+      <small class="muted">· {{ period.sales }} Verkäufe</small>
+    </div>
+    {% endfor %}
+  </div>
+  {% if profit.total.unknown %}
+  <small class="muted">{{ profit.total.unknown }} Verkäufe ohne erfassten Kaufpreis sind nicht enthalten.</small>
+  {% endif %}
+  <p>
+    <strong>Gebundenes Kapital:</strong> {{ capital.tied_up | coins }}
+    <small class="muted">in {{ capital.positions }} offenen Positionen{% if capital.unknown_buy %}, dazu {{ capital.unknown_buy }} ohne Kaufpreis{% endif %}</small>
+    · <strong>Marktwert nach Steuer:</strong> {{ capital.market_value | coins }}
+    {% if capital.without_market %}<small class="muted">({{ capital.without_market }} ohne Marktpreis)</small>{% endif %}
+  </p>
+  {% if profit.days %}
+  <details>
+    <summary>Nach Tagen und Wochen</summary>
+    <div class="grid">
+      {% for title, periods, fmt in (("Tage", profit.days, "%a %d.%m."), ("Wochen (ab Montag)", profit.weeks, "KW %V · ab %d.%m.")) %}
+      <table>
+        <thead><tr><th>{{ title }}</th><th class="num">Gewinn</th><th class="num">Verkäufe</th></tr></thead>
+        <tbody>
+        {% for period in periods %}
+          <tr>
+            <td>{{ period.start | weekday_date(fmt) }}</td>
+            <td class="num"><span class="{% if period.profit > 0 %}up{% elif period.profit < 0 %}down{% endif %}">{{ period.profit | coins }}</span></td>
+            <td class="num">{{ period.sales }}{% if period.unknown %} <small class="muted">+{{ period.unknown }} ohne Kaufpreis</small>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+</article>
+
 <form method="post" action="/portfolio/buy">
   <fieldset role="group">
     <input type="text" name="ea_id" placeholder="Karte, z. B. „Musiala 87“, EA-ID oder FUT.GG-Link" aria-label="Karte" required>

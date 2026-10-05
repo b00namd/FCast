@@ -2,10 +2,11 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, tzinfo
 
 from sqlalchemy.orm import Session
 
-from fcast.analysis.pricing import break_even_sell_price, profit
+from fcast.analysis.pricing import break_even_sell_price, net_after_tax, profit
 from fcast.config import Settings
 from fcast.db import repositories as repo
 from fcast.db.models import PortfolioPosition, PositionStatus
@@ -81,3 +82,88 @@ def summarize(
         if row.at_market is not None:
             summary.unrealised += row.at_market
     return summary
+
+
+# --- profit per day and week ---------------------------------------------------------
+
+DAYS_SHOWN = 14
+WEEKS_SHOWN = 8
+
+
+@dataclass
+class PeriodProfit:
+    start: date  # local day, or the Monday of the week
+    profit: int = 0  # after the 5 % tax, sales with a known buy price only
+    sales: int = 0  # sales counted in `profit`
+    unknown: int = 0  # sales without a recorded purchase (not in `profit`)
+
+
+@dataclass
+class ProfitReport:
+    today: PeriodProfit
+    week: PeriodProfit
+    total: PeriodProfit
+    days: list[PeriodProfit]  # newest first, only days with sales
+    weeks: list[PeriodProfit]  # newest first, only weeks with sales
+
+
+def _add(period: PeriodProfit, gain: int | None) -> None:
+    if gain is None:
+        period.unknown += 1
+    else:
+        period.profit += gain
+        period.sales += 1
+
+
+def profit_report(session: Session, tz: tzinfo, now: datetime) -> ProfitReport:
+    """Realised profit per local day and week (Monday to Sunday) and in total."""
+    today = now.astimezone(tz).date()
+    monday = today - timedelta(days=today.weekday())
+    days: dict[date, PeriodProfit] = {}
+    weeks: dict[date, PeriodProfit] = {}
+    total = PeriodProfit(date.min)
+    for position in repo.list_positions(session, [PositionStatus.SOLD]):
+        if position.sold_at is None or position.sell_price is None:
+            continue
+        gain = profit(position.buy_price, position.sell_price) if position.buy_price else None
+        day = position.sold_at.astimezone(tz).date()
+        week = day - timedelta(days=day.weekday())
+        _add(days.setdefault(day, PeriodProfit(day)), gain)
+        _add(weeks.setdefault(week, PeriodProfit(week)), gain)
+        _add(total, gain)
+    return ProfitReport(
+        today=days.get(today, PeriodProfit(today)),
+        week=weeks.get(monday, PeriodProfit(monday)),
+        total=total,
+        days=[days[d] for d in sorted(days, reverse=True)[:DAYS_SHOWN]],
+        weeks=[weeks[w] for w in sorted(weeks, reverse=True)[:WEEKS_SHOWN]],
+    )
+
+
+# --- capital tied up -----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Capital:
+    positions: int  # open positions (held or listed)
+    tied_up: int  # buy prices of the open positions with a recorded purchase
+    unknown_buy: int  # open positions without a recorded purchase (not in `tied_up`)
+    market_value: int  # what selling everything at the market price would bring after tax
+    without_market: int  # open positions without a current market price (not in the value)
+
+
+def capital(session: Session, settings: Settings) -> Capital:
+    """Capital in all open positions, whatever the portfolio view filters."""
+    tied_up = unknown = value = missing = 0
+    positions = repo.list_positions(session, OPEN_POSITIONS)
+    for position in positions:
+        if position.buy_price is None:
+            unknown += 1
+        else:
+            tied_up += position.buy_price
+        snapshot = repo.latest_snapshot(session, position.player, settings.platform)
+        if snapshot is not None and snapshot.price is not None:
+            value += net_after_tax(snapshot.price)
+        else:
+            missing += 1
+    return Capital(len(positions), tied_up, unknown, value, missing)

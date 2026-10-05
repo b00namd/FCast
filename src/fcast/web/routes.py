@@ -1090,6 +1090,8 @@ def _portfolio_context(
         "show_all": show_all,
         "errors": errors or [],
         "coins": wallet.balance(session),
+        "profit": portfolio_summary.profit_report(session, settings.tz, utcnow()),
+        "capital": portfolio_summary.capital(session, settings),
     }
 
 

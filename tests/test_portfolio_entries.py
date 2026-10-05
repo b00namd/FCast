@@ -289,3 +289,61 @@ def test_parse_entries() -> None:
 def test_parse_entries_rejects_bad_input(data: object) -> None:
     with pytest.raises(ValueError):
         parse_entries(data)
+
+
+# --- profit per period ---------------------------------------------------------------
+
+
+def test_profit_per_day_week_and_total(session: Session, cards: dict[str, Player]) -> None:
+    from zoneinfo import ZoneInfo
+
+    berlin = ZoneInfo("Europe/Berlin")
+    # Monday 05.10.2026, 12:00 UTC. Berlin is UTC+2 (summer time).
+    now = datetime(2026, 10, 5, 12, 0, tzinfo=UTC)
+
+    def sale(buy: int | None, sell: int, sold_at: datetime) -> None:
+        position = repo.open_position(session, cards["wirtz"], buy, sold_at - timedelta(hours=1))
+        repo.sell_position(session, position, sell, sold_at)
+
+    sale(10_000, 12_000, now - timedelta(hours=2))  # today: 11.400 - 10.000 = 1.400
+    # Sunday 23:30 UTC = Monday 01:30 in Berlin: still today and this week.
+    sale(5_000, 6_000, datetime(2026, 10, 4, 23, 30, tzinfo=UTC))  # 5.700 - 5.000 = 700
+    # Sunday 21:00 UTC = 23:00 in Berlin: last week.
+    sale(20_000, 20_000, datetime(2026, 10, 4, 21, 0, tzinfo=UTC))  # 19.000 - 20.000 = -1.000
+    sale(None, 30_000, now - timedelta(hours=1))  # pack card: not in the profit
+
+    report = portfolio_summary.profit_report(session, berlin, now)
+    assert (report.today.profit, report.today.sales, report.today.unknown) == (2_100, 2, 1)
+    assert report.week.profit == 2_100
+    assert report.week.start.isoformat() == "2026-10-05"
+    assert (report.total.profit, report.total.sales, report.total.unknown) == (1_100, 3, 1)
+    assert [d.start.isoformat() for d in report.days] == ["2026-10-05", "2026-10-04"]
+    assert [w.start.isoformat() for w in report.weeks] == ["2026-10-05", "2026-09-28"]
+    assert report.weeks[1].profit == -1_000
+
+
+def test_profit_report_without_sales(session: Session) -> None:
+    from zoneinfo import ZoneInfo
+
+    report = portfolio_summary.profit_report(session, ZoneInfo("Europe/Berlin"), NOW)
+    assert (report.today.profit, report.week.profit, report.total.profit) == (0, 0, 0)
+    assert report.days == [] and report.weeks == []
+
+
+def test_capital_counts_all_open_positions(session: Session, cards: dict[str, Player]) -> None:
+    settings = Settings(_env_file=None, platform="pc")  # type: ignore[call-arg]
+    held = repo.open_position(session, cards["wirtz"], 30_000, NOW)
+    listed = repo.open_position(session, cards["musiala"], 45_000, NOW)
+    repo.mark_listed(session, listed, 52_000, NOW)
+    repo.open_position(session, cards["olise"], None, NOW)  # from a pack
+    sold = repo.open_position(session, cards["wirtz"], 28_000, NOW)
+    repo.sell_position(session, sold, 35_000, NOW)  # not tied up any more
+    repo.add_snapshot(session, cards["wirtz"], Platform.PC, 32_000, "futbin", NOW)
+    repo.add_snapshot(session, cards["olise"], Platform.PC, 10_000, "futbin", NOW)
+    del held
+
+    capital = portfolio_summary.capital(session, settings)
+    assert (capital.positions, capital.tied_up, capital.unknown_buy) == (3, 75_000, 1)
+    # Wirtz 32.000 and Olise 10.000 after tax; Musiala has no market price.
+    assert capital.market_value == 30_400 + 9_500
+    assert capital.without_market == 1

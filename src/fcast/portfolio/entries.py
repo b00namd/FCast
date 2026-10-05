@@ -27,6 +27,7 @@ from fcast.db import repositories as repo
 from fcast.db.models import Player, PortfolioPosition, PositionStatus
 from fcast.portfolio import coins as wallet
 from fcast.portfolio import lookup
+from fcast.portfolio.summary import Capital, ProfitReport
 from fcast.sources import futbin
 
 DUPLICATE_BUY = timedelta(days=1)
@@ -71,6 +72,8 @@ class Booking:
     results: list[Result] = field(default_factory=list)
     balance_before: int | None = None  # FCast's balance before the entries
     balance_after: int | None = None  # after the entries (and the screenshot's value)
+    profit: ProfitReport | None = None  # realised profit including these entries
+    capital: Capital | None = None  # open positions after these entries
 
     @property
     def ok(self) -> bool:

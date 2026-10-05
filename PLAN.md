@@ -209,7 +209,15 @@ stehen. (Portfolio/Verkaufs-Tracking hat der Nutzer bewusst zurückgestellt, sie
 
 ---
 
-## Phase 16 – Selbstlernende Gewichtung
+## ✅ Phase 16 – Gewinn nach Zeitraum & gebundenes Kapital (erledigt)
+> **Stand 05.10.2026:** Gewinn nach Steuer heute, diese Woche (Mo–So) und gesamt, dazu die
+> letzten 14 Tage und 8 Wochen – automatisch aus den erfassten Verkäufen. Gebundenes Kapital und
+> Marktwert über alle offenen Positionen. Im Portfolio, in `fcast portfolio profit`/`list` und in
+> der Vorschau jedes Screenshot-Eintrags.
+
+---
+
+## Phase 17 – Selbstlernende Gewichtung
 Ziel: Signale, die sich im Backtest bewährt haben, stärker gewichten – und schwache leiser stellen.
 
 **Aufgaben**
@@ -227,7 +235,7 @@ Ziel: Signale, die sich im Backtest bewährt haben, stärker gewichten – und s
 
 ---
 
-## Phase 17 – SBC-Futter vor großen SBCs
+## Phase 18 – SBC-Futter vor großen SBCs
 > Futter-Index je Rating 82–90 und Signal „Futter zieht an“ gibt es seit Phase 10. Offen ist der
 > Vorlauf: Futter kaufen, **bevor** eine große SBC erscheint.
 
@@ -246,7 +254,7 @@ Ziel: Signale, die sich im Backtest bewährt haben, stärker gewichten – und s
 
 ---
 
-## Phase 18 – Reddit-Sentiment
+## Phase 19 – Reddit-Sentiment
 Ziel: Hype um einzelne Karten früh sehen (Hype-Score als zusätzliches Radar-Signal).
 
 **Aufgaben**
@@ -263,7 +271,7 @@ Ziel: Hype um einzelne Karten früh sehen (Hype-Score als zusätzliches Radar-Si
 
 ---
 
-## Phase 19 – SBC-Lösungsrechner mit eigenem Club
+## Phase 20 – SBC-Lösungsrechner mit eigenem Club
 Ziel: günstigste Lösung für eine SBC aus eigenen Karten plus Markt.
 
 **Aufgaben**

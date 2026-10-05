@@ -62,6 +62,9 @@ def build_templates(settings: Settings) -> Jinja2Templates:
     templates.env.filters["isodt"] = lambda value, fmt="%d.%m. %H:%M": format_dt(
         datetime.fromisoformat(value) if value else None, fmt
     )
+    templates.env.filters["weekday_date"] = lambda day, fmt="%a %d.%m.": day.strftime(
+        fmt.replace("%a", WEEKDAYS[day.weekday()])
+    )
     templates.env.filters["chem_group"] = chem_group
     templates.env.filters["chem_group_label"] = lambda name: GROUP_LABELS[chem_group(name)]
     templates.env.globals["version"] = __version__

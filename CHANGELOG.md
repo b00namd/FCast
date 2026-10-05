@@ -42,6 +42,17 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 - Beide Seiten in der Hauptnavigation; die CLI-Befehle (`fcast portfolio …`) bleiben daneben
   bestehen.
 
+### Phase 16 – Gewinn nach Zeitraum & gebundenes Kapital
+- **Gewinn heute, diese Woche, gesamt** – nach 5 % Steuer, nach deutscher Zeit, Woche Montag bis
+  Sonntag. Wird automatisch aus den erfassten Verkäufen berechnet, auch aus denen per Screenshot.
+  Verkäufe ohne erfassten Kaufpreis zählen nicht mit und werden als Anzahl genannt.
+- **Gebundenes Kapital über alle offenen Positionen** (unabhängig vom Filter der Ansicht), dazu
+  der Marktwert nach Steuer, wenn alles zum Marktpreis verkauft würde; Positionen ohne Kaufpreis
+  bzw. ohne Marktpreis werden gesondert gezählt.
+- Anzeige: Kasten „Gewinn nach Steuer“ im Portfolio mit aufklappbarer Liste der letzten 14 Tage
+  und 8 Wochen; `fcast portfolio profit` (neu); Zusammenfassung unter `fcast portfolio list` und
+  in der Vorschau von `fcast portfolio apply`.
+
 ### Phase 15 – Eintragen per Screenshot
 - **Karten per Name:** `fcast portfolio buy "Musiala 87" 45000` – Wörter vor der Bewertung sind
   der Name, danach der Kartentyp (`"Olise 91 TOTW"`, `"… Holo"`; Kürzel wie TOTW/IF/POTM

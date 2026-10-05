@@ -1374,3 +1374,19 @@ def test_portfolio_page_shows_listings_and_unknown_buy(
     page = client.get("/portfolio").text
     assert "unbekannt" in page
     assert "2× eingestellt" in page  # noqa: RUF001
+
+
+def test_portfolio_page_shows_profit_per_period(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 41)
+    with collector.session_factory.begin() as session:
+        player = repo.get_player_by_ea_id(session, 41)
+        assert player is not None
+        position = repo.open_position(session, player, 10_000)
+        repo.sell_position(session, position, 14_000)
+
+    page = client.get("/portfolio").text
+    assert "Gewinn nach Steuer" in page
+    assert "Diese Woche" in page
+    assert page.count("3.300") >= 3  # today, this week and total
+    assert "Nach Tagen und Wochen" in page
+    assert "Gebundenes Kapital" in page
