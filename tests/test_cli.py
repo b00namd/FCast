@@ -396,3 +396,44 @@ def test_cards_command(db_path: Path) -> None:
     assert "Sturm" in result.output
     assert "Zu wenige Karten mit Spielzahl" in result.output
     assert "Goldkarten für die übliche Preiskurve" in result.output
+
+
+def test_uev_command(db_path: Path) -> None:
+    from fcast.db import repositories as repo
+    from fcast.db.session import create_db_engine, create_session_factory
+    from fcast.sources.base import CardAttributes
+
+    assert runner.invoke(app, ["db", "upgrade"]).exit_code == 0
+    assert "No cards" in runner.invoke(app, ["uev"]).output
+
+    settings = get_settings()
+    engine = create_db_engine(settings.db_url)
+    stats = {name: 85 for name in ("Acceleration", "Sprint Speed", "Finishing", "Att. Position")}
+    stats |= {name: 80 for name in ("Shot Power", "Composure", "Ball Control", "Agility")}
+    with create_session_factory(engine).begin() as session:
+        for ea_id, name, rating, price, games in (
+            (9, "Stürmer", 86, 9_800, 12_345),
+            (10, "Teuer", 88, 90_000, 50_000),
+        ):
+            player = repo.upsert_player(
+                session,
+                ea_id,
+                repo.PlayerDetails(
+                    name=name,
+                    rating=rating,
+                    position="ST",
+                    games_used=games,
+                    attributes_raw=CardAttributes(stats=stats).to_json(),
+                ),
+            )
+            repo.add_snapshot(session, player, settings.platform, price, "futbin")
+    engine.dispose()
+
+    result = runner.invoke(app, ["uev"], env={"COLUMNS": "200"})
+    assert result.exit_code == 0, result.output
+    assert "Stürmer" in result.output
+    assert "12.345" in result.output
+    assert "10.250" in result.output  # max buy
+    assert "11.000" in result.output  # break-even
+    assert "Teuer" not in result.output
+    assert "Teuer" in runner.invoke(app, ["uev", "--max-price", "100000", "--flat"]).output

@@ -12,6 +12,19 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   eingebetteten Kartendaten). Der Collector wertet das wie „extinct“ als Antwort: kein Fehler,
   keine Ersatzanfrage bei FUTNext, eigener Zähler „nicht handelbar“ im Status.
 
+### Phase 13 – ÜV-Einkaufsliste
+- **`fcast uev`** listet die meistgespielten Karten (FUTBIN-Spielzähler), die noch günstig zu
+  haben sind – **nach Kartenbewertung gruppiert**, innerhalb einer Bewertung die beliebtesten
+  zuerst. Je Karte: Marktpreis, höchster sinnvoller Kaufpreis (`--premium`, Standard 500) und
+  der Break-even-Verkaufspreis nach EA-Steuer.
+- Optionen: `--max-price` (Standard 60.000), `--premium`, `--limit` (je Bewertung, Standard 5),
+  `--rating 86` für eine einzelne Bewertung, `--flat` für eine durchgehende Liste nach
+  Beliebtheit statt der Gruppierung.
+- Hintergrund: Der gesammelte Marktpreis ist der günstigste Sofortkauf, und diese Angebote
+  tragen meist **keinen Chemie-Stil**. Eine Karte mit dem beliebten Stil ist einem Käufer mehr
+  wert – gesucht wird also eine solche nahe am Grundpreis. Welche Angebote einen Stil tragen,
+  steht nicht in den Preisdaten; dieser Schritt bleibt Handarbeit.
+
 ### Phase 12 – Portfolio & Verkaufs-Tracking
 - **Käufe und Verkäufe erfassen:** `fcast portfolio buy <ea-id> <preis>`, `listed <id> <preis>`,
   `sell <id> <preis>`, `rm <id>` und `list` (mit `--all` auch die verkauften Positionen).

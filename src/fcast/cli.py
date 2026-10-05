@@ -1107,3 +1107,75 @@ def portfolio_list(
         typer.echo(
             f"Realised profit: {format_coins(realised)} - capital tied up: {format_coins(tied_up)}"
         )
+
+
+@app.command()
+def uev(
+    max_price: Annotated[
+        int, typer.Option("--max-price", help="Only cards up to this market price.", min=1)
+    ] = 60_000,
+    premium: Annotated[
+        int, typer.Option("--premium", help="Extra coins a styled copy may cost.", min=0)
+    ] = 500,
+    limit: Annotated[int, typer.Option("--limit", help="How many cards per rating.", min=1)] = 5,
+    rating: Annotated[
+        int | None, typer.Option("--rating", help="Only this card rating, e.g. 86.", min=1)
+    ] = None,
+    flat: Annotated[
+        bool, typer.Option("--flat", help="One list by popularity instead of per rating.")
+    ] = False,
+) -> None:
+    """Shopping list for ÜV: the most played cards that are still cheap to buy."""
+    from sqlalchemy import select
+
+    from fcast.analysis.cards import card_values
+    from fcast.analysis.uev import by_rating, uev_candidates
+    from fcast.db.base import utcnow
+    from fcast.db.models import Player
+
+    settings = get_settings()
+    with _db_session() as session:
+        values = card_values(session, settings, utcnow())
+        candidates = uev_candidates(
+            values,
+            max_price=max_price,
+            premium=premium,
+            limit=limit if flat else None,
+            rating=rating,
+        )
+        if not candidates:
+            typer.echo("No cards with both a price and usage data yet.")
+            return
+        groups = [(None, candidates)] if flat else [(r, g) for r, g in by_rating(candidates, limit)]
+        names = {
+            player.id: player.display_name
+            for player in session.scalars(
+                select(Player).where(Player.id.in_([c.player_id for c in candidates]))
+            )
+        }
+
+        title = f"ÜV candidates (up to {format_coins(max_price)}, +{premium} premium)"
+        table = Table(title=title)
+        table.add_column("Rating", justify="right")
+        table.add_column("Games", justify="right")
+        table.add_column("Card")
+        table.add_column("Market", justify="right")
+        table.add_column("Max buy", justify="right")
+        table.add_column("Break-even", justify="right")
+        for group_rating, group in groups:
+            if group_rating is not None and group is not groups[0][1]:
+                table.add_section()
+            for candidate in group:
+                table.add_row(
+                    str(candidate.rating) if candidate.rating is not None else "-",
+                    f"{candidate.games:,}".replace(",", "."),
+                    names.get(candidate.player_id, str(candidate.player_id)),
+                    format_coins(candidate.price),
+                    format_coins(candidate.max_buy),
+                    format_coins(candidate.break_even),
+                )
+        console.print(table)
+        typer.echo(
+            "Market price is the cheapest offer, usually without a chemistry style. "
+            "Buy a styled copy up to 'Max buy' and list it above 'Break-even'."
+        )
