@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 if TYPE_CHECKING:
     from fcast.db.models import Player
+    from fcast.portfolio.entries import Booking, Entry, Result
 
 from fcast import __version__
 from fcast.config import get_settings
@@ -971,73 +972,186 @@ def promo_list() -> None:
         console.print(table)
 
 
+class _PreviewOnlyError(Exception):
+    """Leaves `_db_session` without committing (preview of a booking)."""
+
+    def __init__(self, booking: "Booking") -> None:
+        super().__init__("preview")
+        self.booking = booking
+
+
+def _book(entries: "list[Entry]", coins: int | None = None, write: bool = True) -> "Booking":
+    """Book entries (looking up unknown cards on FUTBIN); commit only if `write` and all ok."""
+    from fcast.db.base import utcnow
+    from fcast.portfolio import entries as booking_service
+    from fcast.sources import futbin as futbin_source
+    from fcast.sources.registry import make_http_client
+
+    settings = get_settings()
+    source = None
+    if futbin_source.SOURCE_NAME in settings.web_sources:
+        source = futbin_source.FutbinSource(
+            make_http_client(settings), lambda _: None, settings.platform
+        )
+
+    async def run(session: Session) -> "Booking":
+        try:
+            return await booking_service.book(session, entries, utcnow(), coins, source)
+        finally:
+            if source is not None:
+                await source.aclose()
+
+    try:
+        with _db_session() as session:
+            booking = asyncio.run(run(session))
+            if not (write and booking.ok):
+                raise _PreviewOnlyError(booking)
+            return booking
+    except _PreviewOnlyError as rollback:
+        return rollback.booking
+
+
+def _print_booking(booking: "Booking", written: bool) -> None:
+    from fcast.portfolio.entries import Outcome
+
+    title = "Booked" if written else "Preview - nothing written yet"
+    table = Table(title=title)
+    for column in ("Action", "Card", "Price", "#", "Result", "Coins"):
+        table.add_column(column, justify="right" if column in ("Price", "#", "Coins") else "left")
+    styles = {Outcome.DONE: "green", Outcome.SKIPPED: "yellow", Outcome.ERROR: "red"}
+    for result in booking.results:
+        note = result.note + (
+            " (new card from FUTBIN, now on the watchlist)" if result.new_card else ""
+        )
+        table.add_row(
+            result.entry.action.value,
+            result.card or result.entry.card or f"#{result.entry.position_id}",
+            format_coins(result.entry.price),
+            str(result.position_id or "-"),
+            f"[{styles[result.outcome]}]{result.outcome.value}[/]: {note}",
+            format_coins(result.coins) if result.coins else "",
+        )
+    console.print(table)
+    if booking.balance_after is not None:
+        typer.echo(
+            f"Coin balance: {format_coins(booking.balance_before)} -> "
+            f"{format_coins(booking.balance_after)}"
+        )
+
+
+def _position_or_card(ref: str) -> tuple[str | None, int | None]:
+    """'17' or '#17' is a position id, anything else a card ("Musiala 87", "ea:231747")."""
+    value = ref.strip()
+    if value.lstrip("#").isdigit():
+        return None, int(value.lstrip("#"))
+    if value.lower().startswith("ea:"):
+        return value[3:].strip(), None
+    return value, None
+
+
+def _single(entry: "Entry") -> "Result":
+    from fcast.portfolio.entries import Outcome
+
+    booking = _book([entry])
+    result = booking.results[0]
+    if result.outcome is Outcome.ERROR:
+        typer.secho(f"Error: {result.note}.", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+    _print_booking(booking, written=True)
+    return result
+
+
+CARD_HELP = 'Card as on the screenshot ("Musiala 87", "Olise 91 TOTW") or EA id.'
+AGAIN_HELP = "Book even if it looks like a duplicate."
+
+
 @portfolio_app.command("buy")
 def portfolio_buy(
-    ea_id: Annotated[int, typer.Argument(help="EA card id.", min=1)],
+    card: Annotated[str, typer.Argument(help=CARD_HELP)],
     price: Annotated[int, typer.Argument(help="Price paid, in coins.", min=1)],
+    again: Annotated[bool, typer.Option("--again", help=AGAIN_HELP)] = False,
 ) -> None:
     """Record a purchase."""
     from fcast.analysis.pricing import break_even_sell_price
-    from fcast.db import repositories as repo
+    from fcast.portfolio.entries import Action, Entry
 
-    with _db_session() as session:
-        player = repo.get_player_by_ea_id(session, ea_id)
-        if player is None:
-            raise typer.BadParameter(
-                f"card {ea_id} is unknown - add it with `fcast watch add {ea_id}` first"
-            )
-        position = repo.open_position(session, player, price)
-        target = break_even_sell_price(price)
-        typer.echo(
-            f"#{position.id} {player.display_name}: bought for {format_coins(price)}. "
-            f"Sell at {format_coins(target)} or more to break even after the 5 % tax."
-        )
+    _single(Entry(Action.BUY, price, card=card, again=again))
+    typer.echo(
+        f"Sell at {format_coins(break_even_sell_price(price))} or more to break even "
+        "after the 5 % tax."
+    )
 
 
 @portfolio_app.command("listed")
 def portfolio_listed(
-    position_id: Annotated[int, typer.Argument(help="Position id.", min=1)],
+    ref: Annotated[str, typer.Argument(help="Position id (17 or #17) or card.")],
     price: Annotated[int, typer.Argument(help="Asking price, in coins.", min=1)],
+    again: Annotated[
+        bool, typer.Option("--again", help="Relisted at the same price (e.g. after expiry).")
+    ] = False,
 ) -> None:
-    """Note the price a held card is currently listed at."""
-    from fcast.db import repositories as repo
+    """Note a (re)listing; every listing is kept in the history."""
+    from fcast.portfolio.entries import Action, Entry
 
-    with _db_session() as session:
-        try:
-            position = repo.get_position(session, position_id)
-            repo.mark_listed(session, position, price)
-        except (repo.NotFoundError, repo.InvalidStateError) as exc:
-            typer.secho(f"Error: {exc}.", fg=typer.colors.RED, err=True)
-            raise typer.Exit(1) from exc
-        typer.echo(
-            f"#{position.id} {position.player.display_name}: listed at {format_coins(price)}."
-        )
+    card, position_id = _position_or_card(ref)
+    _single(Entry(Action.LISTED, price, card=card, position_id=position_id, again=again))
 
 
 @portfolio_app.command("sell")
 def portfolio_sell(
-    position_id: Annotated[int, typer.Argument(help="Position id.", min=1)],
+    ref: Annotated[str, typer.Argument(help="Position id (17 or #17) or card.")],
     price: Annotated[int, typer.Argument(help="Price the card sold for, in coins.", min=1)],
+    again: Annotated[bool, typer.Option("--again", help=AGAIN_HELP)] = False,
 ) -> None:
-    """Record a sale and show the profit after the EA tax."""
+    """Record a sale; without an open position one with unknown buy price is created."""
     from fcast.analysis.pricing import profit as net_profit
     from fcast.db import repositories as repo
+    from fcast.portfolio.entries import Action, Entry
 
+    card, position_id = _position_or_card(ref)
+    result = _single(Entry(Action.SOLD, price, card=card, position_id=position_id, again=again))
     with _db_session() as session:
-        try:
-            position = repo.get_position(session, position_id)
-            name = position.player.display_name
-            buy_price = position.buy_price
-            repo.sell_position(session, position, price)
-        except (repo.NotFoundError, repo.InvalidStateError) as exc:
-            typer.secho(f"Error: {exc}.", fg=typer.colors.RED, err=True)
-            raise typer.Exit(1) from exc
-        gain = net_profit(buy_price, price)
-        verdict = "profit" if gain >= 0 else "loss"
-        typer.echo(
-            f"#{position_id} {name}: {format_coins(buy_price)} -> {format_coins(price)} "
-            f"= {format_coins(gain)} {verdict} after tax."
-        )
+        position = repo.get_position(session, result.position_id or 0)
+        if position.buy_price is None:
+            typer.echo("Buy price unknown - the sale counts for the coin balance only.")
+        else:
+            gain = net_profit(position.buy_price, price)
+            verdict = "profit" if gain >= 0 else "loss"
+            typer.echo(
+                f"{format_coins(position.buy_price)} -> {format_coins(price)} "
+                f"= {format_coins(gain)} {verdict} after tax."
+            )
+
+
+@portfolio_app.command("apply")
+def portfolio_apply(
+    file: Annotated[str, typer.Argument(help="JSON file with the entries, '-' for stdin.")],
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Write; default is a preview.")] = False,
+) -> None:
+    """Book several entries from a screenshot at once (preview first).
+
+    JSON: {"coins": 250000, "entries": [{"action": "sold", "card": "Wirtz 86",
+    "price": 30000}, {"action": "listed", "position": 12, "price": "45k", "again": true}]}
+    """
+    import json
+    import sys
+
+    from fcast.portfolio.entries import parse_entries
+
+    text = sys.stdin.read() if file == "-" else Path(file).read_text(encoding="utf-8")
+    try:
+        entries, coins = parse_entries(json.loads(text))
+    except (ValueError, json.JSONDecodeError) as exc:
+        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
+    booking = _book(entries, coins, write=yes)
+    written = yes and booking.ok
+    _print_booking(booking, written=written)
+    if not booking.ok:
+        typer.secho("Nothing written: fix the errors above.", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+    if not yes:
+        typer.echo("Run again with --yes to write these entries.")
 
 
 @portfolio_app.command("rm")
@@ -1086,52 +1200,43 @@ def portfolio_coins(
 def portfolio_list(
     show_all: Annotated[bool, typer.Option("--all", "-a", help="Include sold positions.")] = False,
 ) -> None:
-    """Open positions, realised profit and the capital currently tied up."""
-    from fcast.analysis.pricing import break_even_sell_price
-    from fcast.analysis.pricing import profit as net_profit
-    from fcast.db import repositories as repo
-    from fcast.db.models import PositionStatus
+    """Open positions, listings, realised profit and the capital currently tied up."""
     from fcast.portfolio import coins as wallet
+    from fcast.portfolio import summary as portfolio_summary
 
-    open_states = [PositionStatus.HOLDING, PositionStatus.LISTED]
     with _db_session() as session:
-        positions = repo.list_positions(session, None if show_all else open_states)
-        if not positions:
+        summary = portfolio_summary.summarize(
+            session, get_settings(), None if show_all else portfolio_summary.OPEN_POSITIONS
+        )
+        if not summary.rows:
             typer.echo("No positions yet - record one with `fcast portfolio buy`.")
             return
 
         table = Table(title="Portfolio")
-        table.add_column("#", justify="right")
-        table.add_column("Card")
-        table.add_column("Buy", justify="right")
-        table.add_column("Status")
-        table.add_column("Sell", justify="right")
-        table.add_column("Break-even", justify="right")
+        for column in ("#", "Card", "Buy", "Status", "Sell", "Listed", "Market", "Break-even"):
+            table.add_column(column, justify="left" if column in ("Card", "Status") else "right")
         table.add_column("Profit", justify="right")
-
-        realised = 0
-        tied_up = 0
-        for position in positions:
-            if position.status is PositionStatus.SOLD and position.sell_price is not None:
-                gain = net_profit(position.buy_price, position.sell_price)
-                realised += gain
-                profit_text = format_coins(gain)
-            else:
-                tied_up += position.buy_price
-                profit_text = "-"
+        for row in summary.rows:
+            position = row.position
+            listed = f"{row.listings}x" if row.listings else "-"
+            if row.market_below_listing:
+                listed += " (market lower!)"
             table.add_row(
                 str(position.id),
                 position.player.display_name,
-                format_coins(position.buy_price),
+                format_coins(position.buy_price) if not row.unknown_buy else "unknown",
                 position.status.value,
                 format_coins(position.sell_price),
-                format_coins(break_even_sell_price(position.buy_price)),
-                profit_text,
+                listed,
+                format_coins(row.market),
+                format_coins(row.break_even),
+                format_coins(row.profit if row.profit is not None else row.at_market),
             )
         console.print(table)
         balance = wallet.balance(session)
         typer.echo(
-            f"Realised profit: {format_coins(realised)} - capital tied up: {format_coins(tied_up)}"
+            f"Realised profit: {format_coins(summary.realised)} - capital tied up: "
+            f"{format_coins(summary.tied_up)}"
             + (f" - coin balance: {format_coins(balance.coins)}" if balance else "")
         )
 

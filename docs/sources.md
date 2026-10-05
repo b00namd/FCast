@@ -76,6 +76,7 @@ Alle ohne Query-String (robots.txt verbietet `/*?*`), über denselben höflichen
 | `/27/totw/TOTW<n>` | aktuelles TOTW | alle 12 h |
 | `/27/squad-building-challenges/cheapest` | je Rating 81–99 die 12 günstigsten Karten, PC und Konsole getrennt | alle 6 h (Futter-Index) |
 | Spielerseiten | Preis, Angebote, Spielzahl | Radar-Karten etwa alle 6 h, höchstens `FCAST_RADAR_PER_RUN` pro Lauf |
+| `/sitemap_index.xml` + Spieler-Sitemaps | Name-Slug → FUTBIN-ID aller FC-27-Karten | höchstens 1× pro Tag (Cache); für die Seitensuche per EA-ID und die Kartensuche beim Portfolio-Eintrag („Musiala 87“), dann höchstens 6 Spielerseiten pro Suche |
 
 Nicht genutzt: `/27/pgp` (Spielstatistik) – nur Seite 1 nach Rating ist ohne Query-String
 erreichbar, Sortierung nach Spielen (`?sort=games_pc`) und Blättern (`?page=`) sind gesperrt.

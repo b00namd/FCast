@@ -116,13 +116,14 @@ class WatchlistEntry(Base):
 class PortfolioPosition(Base):
     __tablename__ = "portfolio"
     __table_args__ = (
-        CheckConstraint("buy_price > 0", name="buy_price_positive"),
+        CheckConstraint("buy_price IS NULL OR buy_price > 0", name="buy_price_positive"),
         CheckConstraint("sell_price IS NULL OR sell_price > 0", name="sell_price_positive"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="RESTRICT"))
-    buy_price: Mapped[int]
+    # None: the purchase was never recorded (pack, reward, bought before FCast).
+    buy_price: Mapped[int | None]
     bought_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     # Listing price while `listed`, final price once `sold`.
     sell_price: Mapped[int | None]
@@ -132,6 +133,28 @@ class PortfolioPosition(Base):
     )
 
     player: Mapped[Player] = relationship()
+    listings: Mapped[list["PortfolioListing"]] = relationship(
+        back_populates="position",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="PortfolioListing.listed_at",
+    )
+
+
+class PortfolioListing(Base):
+    """Every time a position was put on the transfer market, including relists."""
+
+    __tablename__ = "portfolio_listings"
+    __table_args__ = (CheckConstraint("price > 0", name="price_positive"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    position_id: Mapped[int] = mapped_column(
+        ForeignKey("portfolio.id", ondelete="CASCADE"), index=True
+    )
+    price: Mapped[int]
+    listed_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    position: Mapped[PortfolioPosition] = relationship(back_populates="listings")
 
 
 class Promo(Base):

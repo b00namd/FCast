@@ -18,8 +18,6 @@ from fcast.alerts.notifier import Notification, NotifierError
 from fcast.analysis import cards
 from fcast.analysis import service as analysis
 from fcast.analysis import signals as sig
-from fcast.analysis.pricing import break_even_sell_price
-from fcast.analysis.pricing import profit as net_profit
 from fcast.analysis.uev import by_rating, uev_candidates
 from fcast.backtest import engine
 from fcast.backtest import service as bt
@@ -34,13 +32,15 @@ from fcast.db.models import (
     LeakItem,
     LinkType,
     Player,
-    PositionStatus,
     Promo,
     TotwActual,
     TotwPrediction,
 )
 from fcast.db.session import session_scope
 from fcast.portfolio import coins as wallet
+from fcast.portfolio import entries as entries_service
+from fcast.portfolio import lookup as card_lookup
+from fcast.portfolio import summary as portfolio_summary
 from fcast.promos import service as promo_service
 from fcast.radar import service as radar_service
 from fcast.sources import futbin
@@ -1071,8 +1071,6 @@ def uev_page(
 
 # --- portfolio ---------------------------------------------------------------------------
 
-OPEN_POSITIONS = [PositionStatus.HOLDING, PositionStatus.LISTED]
-
 
 def _portfolio_context(
     session: Session,
@@ -1080,42 +1078,15 @@ def _portfolio_context(
     show_all: bool,
     errors: list[str] | None = None,
 ) -> dict[str, Any]:
-    positions = repo.list_positions(session, None if show_all else OPEN_POSITIONS)
-    rows = []
-    realised = 0
-    tied_up = 0
-    unrealised = 0
-    for position in positions:
-        gain = None
-        market = None
-        at_market = None
-        if position.status is PositionStatus.SOLD and position.sell_price is not None:
-            gain = net_profit(position.buy_price, position.sell_price)
-            realised += gain
-        else:
-            tied_up += position.buy_price
-            snapshot = repo.latest_snapshot(session, position.player, settings.platform)
-            if snapshot is not None and snapshot.price is not None:
-                market = snapshot.price
-                # What selling at today's market price would leave after the tax.
-                at_market = net_profit(position.buy_price, market)
-                unrealised += at_market
-        rows.append(
-            {
-                "position": position,
-                "break_even": break_even_sell_price(position.buy_price),
-                "profit": gain,
-                "market": market,
-                "at_market": at_market,
-            }
-        )
-    rows.reverse()  # newest purchase first
+    summary = portfolio_summary.summarize(
+        session, settings, None if show_all else portfolio_summary.OPEN_POSITIONS
+    )
     return {
         "nav": "portfolio",
-        "rows": rows,
-        "realised": realised,
-        "tied_up": tied_up,
-        "unrealised": unrealised,
+        "rows": list(reversed(summary.rows)),  # newest purchase first
+        "realised": summary.realised,
+        "tied_up": summary.tied_up,
+        "unrealised": summary.unrealised,
         "show_all": show_all,
         "errors": errors or [],
         "coins": wallet.balance(session),
@@ -1155,19 +1126,40 @@ def portfolio_buy(
 ) -> Response:
     errors: list[str] = []
     card_id: int | None = None
+    query: card_lookup.CardQuery | None = None
     try:
         card_id = forms.parse_ea_id(ea_id)
     except ValueError as exc:
-        errors.append(str(exc))
+        if ea_id and any(char.isalpha() for char in ea_id) and "://" not in ea_id:
+            query = card_lookup.parse_query(ea_id)  # "Musiala 87", "Olise 91 TOTW"
+        else:
+            errors.append(str(exc))
     amount = _amount("Kaufpreis", price, errors)
     with _db(request) as session:
-        if card_id is not None and amount is not None:
+        player: Player | None = None
+        if query is not None:
+            found = card_lookup.find_local(session, query)
+            try:
+                player = card_lookup.pick(query, found)
+            except card_lookup.CardLookupError:
+                if found:
+                    names = ", ".join(entries_service.describe(card) for card in found)
+                    errors.append(
+                        f"„{query.text}“ ist nicht eindeutig: {names}. Kartentyp ergänzen "
+                        "(z. B. „Olise 91 TOTW“) oder die EA-ID verwenden."
+                    )
+                else:
+                    errors.append(
+                        f"Keine bekannte Karte passt zu „{query.text}“. EA-ID oder Link "
+                        "verwenden oder die Karte erst auf die Watchlist setzen."
+                    )
+        elif card_id is not None:
             player = repo.get_player_by_ea_id(session, card_id)
             if player is None:
                 errors.append(f"Karte {card_id} ist unbekannt - erst auf die Watchlist setzen.")
-            else:
-                repo.open_position(session, player, amount)
-                return _back_to_portfolio()
+        if player is not None and amount is not None:
+            repo.open_position(session, player, amount)
+            return _back_to_portfolio()
         return _render(
             request,
             "portfolio.html",

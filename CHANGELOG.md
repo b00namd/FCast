@@ -42,6 +42,33 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
 - Beide Seiten in der Hauptnavigation; die CLI-Befehle (`fcast portfolio …`) bleiben daneben
   bestehen.
 
+### Phase 15 – Eintragen per Screenshot
+- **Karten per Name:** `fcast portfolio buy "Musiala 87" 45000` – Wörter vor der Bewertung sind
+  der Name, danach der Kartentyp (`"Olise 91 TOTW"`, `"… Holo"`; Kürzel wie TOTW/IF/POTM
+  werden übersetzt). Gesucht wird zuerst lokal; bei mehreren Treffern gewinnt die einzige
+  Basiskarte, sonst Abbruch mit Liste. Unbekannte Karten sucht FCast über die FUTBIN-Sitemap
+  (höchstens 6 Seiten), speichert sie und setzt sie auf die Watchlist (Notiz „Portfolio“),
+  damit ihr Preis aktuell bleibt. Das Kauf-Formular im Dashboard nimmt ebenfalls Namen an.
+- **`listed` und `sell` nach Karte:** `fcast portfolio sell "Wirtz 86" 30000`; Zahlen bleiben
+  Positionsnummern (`17` oder `#17`). Gewählt wird die passende offene Position (gleicher
+  Einstellpreis, sonst die älteste).
+- **Einstell-Verlauf:** jede (Neu-)Einstellung wird gespeichert (neue Tabelle
+  `portfolio_listings`, Migration übernimmt bestehende Einstellungen). Portfolio zeigt
+  „N× eingestellt“ mit Preisverlauf und den Hinweis „Markt bei X – senken?“, wenn eine Karte
+  mehrfach ohne Verkauf eingestellt war und der Markt darunter liegt.
+- **`fcast portfolio apply <datei|->`:** mehrere Einträge als JSON (`buy`/`listed`/`sold`,
+  Karte oder Position, Preis auch als „45k“) plus Coinstand. Ohne `--yes` nur Vorschau; ein
+  Fehler in einem Eintrag → nichts wird geschrieben.
+- **Duplikat-Schutz:** Screenshots zeigen dieselben Einträge, bis die Transferliste geleert
+  wird. Übersprungen werden: gleicher Kauf binnen 24 h, unveränderte Einstellung, Verkauf zum
+  selben Preis binnen 3 Tagen. `--again` / `"again": true` bucht trotzdem (z. B. Neueinstellung
+  nach Ablauf zum gleichen Preis).
+- **Coinstand aus dem Screenshot:** wird nach den Einträgen gesetzt; die Einträge zählen dabei
+  nicht doppelt. Die Vorschau zeigt den berechneten Stand vorher und nachher.
+- **Kaufpreis unbekannt:** Ein Verkauf oder eine Einstellung ohne offene Position legt eine
+  Position ohne Kaufpreis an (Pack, Belohnung, vor FCast gekauft). Sie zählt für den Coinstand,
+  nicht für Gewinn und gebundenes Kapital.
+
 ### Phase 14 – Coinstand & bezahlbare Signale
 - **Coinstand im Portfolio:** auf der Seite „Portfolio“ oder mit `fcast portfolio coins <betrag>`
   eintragen. Danach rechnen erfasste Käufe (−Kaufpreis) und Verkäufe (+Erlös nach 5 % Steuer)

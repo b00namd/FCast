@@ -199,7 +199,17 @@ stehen. (Portfolio/Verkaufs-Tracking hat der Nutzer bewusst zurückgestellt, sie
 
 ---
 
-## Phase 15 – Selbstlernende Gewichtung
+## ✅ Phase 15 – Eintragen per Screenshot (erledigt)
+> **Stand 05.10.2026:** Der Nutzer schickt Screenshots der Transferliste, Claude trägt ein.
+> Karten per Name („Musiala 87“, „Olise 91 TOTW“) statt EA-ID, unbekannte über die FUTBIN-Sitemap;
+> `buy`/`listed`/`sell` nach Kartenname, älteste offene Position zuerst; Einstell-Verlauf mit
+> Hinweis, wenn der Markt nach mehreren Einstellungen darunter liegt; `fcast portfolio apply`
+> mit Vorschau, Duplikat-Schutz und Coinstand aus dem Screenshot; Verkäufe ohne erfassten Kauf
+> als Position mit unbekanntem Kaufpreis.
+
+---
+
+## Phase 16 – Selbstlernende Gewichtung
 Ziel: Signale, die sich im Backtest bewährt haben, stärker gewichten – und schwache leiser stellen.
 
 **Aufgaben**
@@ -217,7 +227,7 @@ Ziel: Signale, die sich im Backtest bewährt haben, stärker gewichten – und s
 
 ---
 
-## Phase 16 – SBC-Futter vor großen SBCs
+## Phase 17 – SBC-Futter vor großen SBCs
 > Futter-Index je Rating 82–90 und Signal „Futter zieht an“ gibt es seit Phase 10. Offen ist der
 > Vorlauf: Futter kaufen, **bevor** eine große SBC erscheint.
 
@@ -236,7 +246,7 @@ Ziel: Signale, die sich im Backtest bewährt haben, stärker gewichten – und s
 
 ---
 
-## Phase 17 – Reddit-Sentiment
+## Phase 18 – Reddit-Sentiment
 Ziel: Hype um einzelne Karten früh sehen (Hype-Score als zusätzliches Radar-Signal).
 
 **Aufgaben**
@@ -253,7 +263,7 @@ Ziel: Hype um einzelne Karten früh sehen (Hype-Score als zusätzliches Radar-Si
 
 ---
 
-## Phase 18 – SBC-Lösungsrechner mit eigenem Club
+## Phase 19 – SBC-Lösungsrechner mit eigenem Club
 Ziel: günstigste Lösung für eine SBC aus eigenen Karten plus Markt.
 
 **Aufgaben**

@@ -42,7 +42,7 @@
 
 <form method="post" action="/portfolio/buy">
   <fieldset role="group">
-    <input type="text" name="ea_id" placeholder="EA-ID oder FUT.GG-Link" aria-label="Karte" required>
+    <input type="text" name="ea_id" placeholder="Karte, z. B. „Musiala 87“, EA-ID oder FUT.GG-Link" aria-label="Karte" required>
     <input type="text" name="price" placeholder="Kaufpreis, z. B. 4500" aria-label="Kaufpreis" required>
     <button type="submit">Kauf eintragen</button>
   </fieldset>
@@ -81,11 +81,14 @@
     <tr>
       <td>{{ row.position.id }}</td>
       <td><a href="/player/{{ row.position.player.ea_id }}">{{ row.position.player.display_name }}</a></td>
-      <td class="num">{{ row.position.buy_price | coins }}</td>
-      <td>{{ row.position.status.value }}</td>
+      <td class="num">{% if row.unknown_buy %}<span class="muted" title="Kauf nicht erfasst (Pack, Belohnung, vor FCast) – zählt nur für den Coinstand">unbekannt</span>{% else %}{{ row.position.buy_price | coins }}{% endif %}</td>
+      <td>{{ row.position.status.value }}
+        {% if row.listings %}<br><small class="muted" title="{% for l in row.position.listings %}{{ l.price | coins }} ({{ l.listed_at | dt }}){% if not loop.last %} → {% endif %}{% endfor %}">{{ row.listings }}× eingestellt</small>{% endif %}
+        {% if row.market_below_listing %}<br><small class="badge warn" title="Mehrfach eingestellt ohne Verkauf, der Markt liegt unter deinem Preis">Markt bei {{ row.market | coins }} – senken?</small>{% endif %}
+      </td>
       <td class="num">{% if row.position.sell_price %}{{ row.position.sell_price | coins }}{% else %}<span class="muted">–</span>{% endif %}</td>
       <td class="num">{% if row.market %}{{ row.market | coins }}{% else %}<span class="muted">–</span>{% endif %}</td>
-      <td class="num">{{ row.break_even | coins }}</td>
+      <td class="num">{% if row.break_even is not none %}{{ row.break_even | coins }}{% else %}<span class="muted">–</span>{% endif %}</td>
       <td class="num">
         {% if row.at_market is not none %}
           <span class="{% if row.at_market > 0 %}up{% elif row.at_market < 0 %}down{% endif %}">{{ row.at_market | coins }}</span>

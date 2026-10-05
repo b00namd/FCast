@@ -1329,3 +1329,48 @@ def test_signals_and_radar_mark_cards_above_the_balance(
     assert page.count('title="Mehr als dein Coinstand') == 1  # only the ÜV card
     assert "kommt kein Push" in page
     assert client.get("/radar").status_code == 200
+
+
+def test_portfolio_buy_by_card_name(client: TestClient, collector: Collector) -> None:
+    with collector.session_factory.begin() as session:
+        for ea_id, card_type in ((21, "Gold Rare"), (22, "Team of the Week")):
+            repo.upsert_player(
+                session,
+                ea_id,
+                repo.PlayerDetails(name="Michael Olise", rating=91, card_type=card_type),
+            )
+        repo.upsert_player(
+            session,
+            23,
+            repo.PlayerDetails(name="Michael Olise", rating=91, card_type="Team of the Season"),
+        )
+
+    response = client.post(
+        "/portfolio/buy", data={"ea_id": "Olise 91 TOTW", "price": "120k"}, follow_redirects=True
+    )
+    assert response.status_code == 200
+    with collector.session_factory() as session:
+        positions = repo.list_positions(session)
+        assert [(p.player.ea_id, p.buy_price) for p in positions] == [(22, 120_000)]
+
+    ambiguous = client.post("/portfolio/buy", data={"ea_id": "Olise 91 Team", "price": "1000"})
+    assert ambiguous.status_code == 400
+    assert "nicht eindeutig" in ambiguous.text
+    unknown = client.post("/portfolio/buy", data={"ea_id": "Niemand 80", "price": "1000"})
+    assert "Keine bekannte Karte" in unknown.text
+
+
+def test_portfolio_page_shows_listings_and_unknown_buy(
+    client: TestClient, collector: Collector
+) -> None:
+    add_watch(collector, 31)
+    with collector.session_factory.begin() as session:
+        player = repo.get_player_by_ea_id(session, 31)
+        assert player is not None
+        position = repo.open_position(session, player, None)
+        repo.mark_listed(session, position, 5_000)
+        repo.mark_listed(session, position, 4_800)
+
+    page = client.get("/portfolio").text
+    assert "unbekannt" in page
+    assert "2× eingestellt" in page  # noqa: RUF001

@@ -19,6 +19,7 @@ from fcast.db.models import (
     MarketObservation,
     MarketState,
     Player,
+    PortfolioListing,
     PortfolioPosition,
     PositionStatus,
     PriceSnapshot,
@@ -392,9 +393,11 @@ def remove_watch(session: Session, player: Player) -> None:
 
 
 def open_position(
-    session: Session, player: Player, buy_price: int, bought_at: datetime | None = None
+    session: Session, player: Player, buy_price: int | None, bought_at: datetime | None = None
 ) -> PortfolioPosition:
-    _require_positive("buy_price", buy_price)
+    """Record a purchase; `buy_price` None if it is unknown (pack, reward, before FCast)."""
+    if buy_price is not None:
+        _require_positive("buy_price", buy_price)
     position = PortfolioPosition(
         player=player, buy_price=buy_price, bought_at=bought_at or utcnow()
     )
@@ -410,13 +413,19 @@ def get_position(session: Session, position_id: int) -> PortfolioPosition:
     return position
 
 
-def mark_listed(session: Session, position: PortfolioPosition, price: int) -> PortfolioPosition:
-    """Mark a held position as listed on the transfer market at `price`."""
+def mark_listed(
+    session: Session,
+    position: PortfolioPosition,
+    price: int,
+    listed_at: datetime | None = None,
+) -> PortfolioPosition:
+    """Mark a position as listed at `price`; every (re)listing is kept in the history."""
     _require_positive("price", price)
     if position.status is PositionStatus.SOLD:
         raise InvalidStateError(f"position {position.id} is already sold")
     position.status = PositionStatus.LISTED
     position.sell_price = price
+    position.listings.append(PortfolioListing(price=price, listed_at=listed_at or utcnow()))
     session.flush()
     return position
 
@@ -441,6 +450,18 @@ def list_positions(
     if statuses is not None:
         stmt = stmt.where(PortfolioPosition.status.in_(statuses))
     return session.scalars(stmt.order_by(PortfolioPosition.bought_at, PortfolioPosition.id)).all()
+
+
+def open_positions_of(session: Session, player: Player) -> Sequence[PortfolioPosition]:
+    """Held or listed positions of a card, oldest purchase first."""
+    return session.scalars(
+        select(PortfolioPosition)
+        .where(
+            PortfolioPosition.player_id == player.id,
+            PortfolioPosition.status != PositionStatus.SOLD,
+        )
+        .order_by(PortfolioPosition.bought_at, PortfolioPosition.id)
+    ).all()
 
 
 def remove_position(session: Session, position: PortfolioPosition) -> None:

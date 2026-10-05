@@ -59,7 +59,7 @@ def balance(session: Session) -> CoinBalance | None:
     spent = 0
     received = 0
     for position in repo.list_positions(session):
-        if position.bought_at > entered_at:
+        if position.bought_at > entered_at and position.buy_price is not None:
             spent += position.buy_price
         if (
             position.status is PositionStatus.SOLD

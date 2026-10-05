@@ -447,3 +447,92 @@ def test_portfolio_coins_command(db_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "Coin balance: 250.000" in result.output
     assert "Coin balance: 250.000" in runner.invoke(app, ["portfolio", "coins"]).output
+
+
+def _seed_cards() -> None:
+    from fcast.db import repositories as repo
+    from fcast.db.session import create_db_engine, create_session_factory
+
+    assert runner.invoke(app, ["db", "upgrade"]).exit_code == 0
+    engine = create_db_engine(get_settings().db_url)
+    with create_session_factory(engine).begin() as session:
+        for ea_id, name, rating in ((1, "Jamal Musiala", 87), (2, "Florian Wirtz", 86)):
+            repo.upsert_player(
+                session, ea_id, repo.PlayerDetails(name=name, rating=rating, card_type="Gold Rare")
+            )
+    engine.dispose()
+
+
+def test_portfolio_by_card_name(db_path: Path) -> None:
+    _seed_cards()
+    wide = {"COLUMNS": "200"}
+    result = runner.invoke(app, ["portfolio", "buy", "Musiala 87", "45000"], env=wide)
+    assert result.exit_code == 0, result.output
+    assert "Jamal Musiala (87) Gold Rare" in result.output
+    assert "Sell at 47.500" in result.output  # break-even after tax
+
+    assert runner.invoke(app, ["portfolio", "listed", "Musiala 87", "52000"]).exit_code == 0
+    result = runner.invoke(app, ["portfolio", "listed", "#1", "50000"], env=wide)
+    assert "relisted (2x)" in result.output
+
+    result = runner.invoke(app, ["portfolio", "sell", "Wirtz 86", "30000"], env=wide)
+    assert result.exit_code == 0, result.output
+    assert "no recorded purchase" in result.output
+    assert "coin balance only" in result.output
+
+    result = runner.invoke(app, ["portfolio", "list", "--all"], env=wide)
+    assert "2x" in result.output
+    assert "unknown" in result.output
+
+    result = runner.invoke(app, ["portfolio", "buy", "Unbekannt 80", "1000"])
+    assert result.exit_code == 1
+
+
+def test_portfolio_apply_previews_first(db_path: Path, tmp_path: Path) -> None:
+    import json
+
+    _seed_cards()
+    wide = {"COLUMNS": "200"}
+    file = tmp_path / "shot.json"
+    file.write_text(
+        json.dumps(
+            {
+                "coins": "180k",
+                "entries": [
+                    {"action": "buy", "card": "Musiala 87", "price": "45k"},
+                    {"action": "listed", "card": "Musiala 87", "price": 52000},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    preview = runner.invoke(app, ["portfolio", "apply", str(file)], env=wide)
+    assert preview.exit_code == 0, preview.output
+    assert "Preview - nothing written yet" in preview.output
+    assert "--yes" in preview.output
+    assert "No positions yet" in runner.invoke(app, ["portfolio", "list"]).output
+
+    written = runner.invoke(app, ["portfolio", "apply", str(file), "--yes"], env=wide)
+    assert written.exit_code == 0, written.output
+    assert "Booked" in written.output
+    assert "-> 180.000" in written.output
+    assert "Coin balance: 180.000" in runner.invoke(app, ["portfolio", "coins"]).output
+
+    # The same screenshot again: everything is recognised as already booked.
+    again = runner.invoke(app, ["portfolio", "apply", str(file), "--yes"], env=wide)
+    assert again.output.count("skipped") == 2
+
+
+def test_portfolio_apply_writes_nothing_on_errors(db_path: Path) -> None:
+    _seed_cards()
+    data = (
+        '{"entries": [{"action": "buy", "card": "Musiala 87", "price": 1000},'
+        ' {"action": "buy", "card": "Niemand 99", "price": 1000}]}'
+    )
+    result = runner.invoke(app, ["portfolio", "apply", "-", "--yes"], input=data)
+    assert result.exit_code == 1
+    assert "Nothing written" in result.output
+    assert "No positions yet" in runner.invoke(app, ["portfolio", "list"]).output
+
+    bad = runner.invoke(app, ["portfolio", "apply", "-"], input="{not json")
+    assert bad.exit_code == 1

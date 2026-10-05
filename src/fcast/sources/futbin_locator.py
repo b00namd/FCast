@@ -79,8 +79,16 @@ class FutbinLocator:
         return self._index
 
     @staticmethod
-    def candidates(index: dict[str, list[int]], ea_id: int, hints: Sequence[str]) -> list[str]:
-        """Candidate page paths, most likely first."""
+    def candidates(
+        index: dict[str, list[int]],
+        ea_id: int,
+        hints: Sequence[str],
+        newest_first: bool | None = None,
+    ) -> list[str]:
+        """Candidate page paths, most likely first.
+
+        Without an EA id (`ea_id` 0) `newest_first` says whether a special card is wanted.
+        """
         slugs: list[str] = []
         for hint in hints:
             slug = slugify(hint)
@@ -92,7 +100,7 @@ class FutbinLocator:
             for found in [*exact, *partial]:
                 if found not in slugs:
                     slugs.append(found)
-        special = ea_id >= SPECIAL_CARD_MIN_ID
+        special = ea_id >= SPECIAL_CARD_MIN_ID if newest_first is None else newest_first
         paths: list[str] = []
         for slug in slugs:
             # Base cards have the oldest FUTBIN ids, new special cards the newest.
