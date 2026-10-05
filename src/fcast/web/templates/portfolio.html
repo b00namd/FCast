@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Portfolio{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>Portfolio</h2>
+  <p class="muted">Eigene Käufe und Verkäufe, Gewinn nach der 5 % EA-Steuer.
+  „Jetzt“ ist, was ein sofortiger Verkauf zum Marktpreis nach Steuer brächte.</p>
+</hgroup>
+
+{% if errors %}
+<article class="down">
+  <ul>{% for message in errors %}<li>{{ message }}</li>{% endfor %}</ul>
+</article>
+{% endif %}
+
+<p>
+  <strong>Realisierter Gewinn:</strong>
+  <span class="{% if realised > 0 %}up{% elif realised < 0 %}down{% endif %}">{{ realised | coins }}</span>
+  · <strong>gebundenes Kapital:</strong> {{ tied_up | coins }}
+  {% if tied_up %}· <strong>bei Verkauf zum Marktpreis:</strong>
+  <span class="{% if unrealised > 0 %}up{% elif unrealised < 0 %}down{% endif %}">{{ unrealised | coins }}</span>{% endif %}
+</p>
+
+<form method="post" action="/portfolio/buy">
+  <fieldset role="group">
+    <input type="text" name="ea_id" placeholder="EA-ID oder FUT.GG-Link" aria-label="Karte" required>
+    <input type="text" name="price" placeholder="Kaufpreis, z. B. 4500" aria-label="Kaufpreis" required>
+    <button type="submit">Kauf eintragen</button>
+  </fieldset>
+  <small class="muted">Preise gehen auch als „4.500“ oder „45k“.</small>
+</form>
+
+<p>
+  {% if show_all %}
+    <a href="/portfolio" role="button" class="secondary">Nur offene Positionen</a>
+  {% else %}
+    <a href="/portfolio?show_all=true" role="button" class="secondary">Verkaufte mit anzeigen</a>
+  {% endif %}
+</p>
+
+{% if not rows %}
+  <p class="muted">Noch keine Positionen – oben die erste eintragen.</p>
+{% else %}
+<div class="overflow-auto">
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Karte</th>
+      <th class="num">Kauf</th>
+      <th>Zustand</th>
+      <th class="num">Verkauf</th>
+      <th class="num">Markt</th>
+      <th class="num">Break-even</th>
+      <th class="num">Jetzt</th>
+      <th class="num">Gewinn</th>
+      <th>Eintragen</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td>{{ row.position.id }}</td>
+      <td><a href="/player/{{ row.position.player.ea_id }}">{{ row.position.player.display_name }}</a></td>
+      <td class="num">{{ row.position.buy_price | coins }}</td>
+      <td>{{ row.position.status.value }}</td>
+      <td class="num">{% if row.position.sell_price %}{{ row.position.sell_price | coins }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="num">{% if row.market %}{{ row.market | coins }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="num">{{ row.break_even | coins }}</td>
+      <td class="num">
+        {% if row.at_market is not none %}
+          <span class="{% if row.at_market > 0 %}up{% elif row.at_market < 0 %}down{% endif %}">{{ row.at_market | coins }}</span>
+        {% else %}
+          <span class="muted">–</span>
+        {% endif %}
+      </td>
+      <td class="num">
+        {% if row.profit is not none %}
+          <span class="{% if row.profit > 0 %}up{% elif row.profit < 0 %}down{% endif %}">{{ row.profit | coins }}</span>
+        {% else %}
+          <span class="muted">–</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if row.profit is none %}
+        <form method="post" action="/portfolio/{{ row.position.id }}/sell">
+          <fieldset role="group">
+            <input type="text" name="price" placeholder="Preis" aria-label="Verkaufspreis" required>
+            <button type="submit">Verkauft</button>
+          </fieldset>
+        </form>
+        <form method="post" action="/portfolio/{{ row.position.id }}/listed">
+          <fieldset role="group">
+            <input type="text" name="price" placeholder="Preis" aria-label="Eingestellt zu" required>
+            <button type="submit" class="secondary">Eingestellt</button>
+          </fieldset>
+        </form>
+        {% endif %}
+        <form method="post" action="/portfolio/{{ row.position.id }}/delete"
+              onsubmit="return confirm('Position {{ row.position.id }} wirklich löschen?')">
+          <button type="submit" class="secondary outline">Löschen</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

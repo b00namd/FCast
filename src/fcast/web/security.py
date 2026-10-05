@@ -9,17 +9,27 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from fcast.config import Settings
 
-_basic = HTTPBasic(realm="FCast")
+# auto_error=False: without a password configured the dashboard stays open (LAN only).
+_basic = HTTPBasic(realm="FCast", auto_error=False)
 
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+ANONYMOUS = "anonymous"  # no password configured
 
 
 def require_auth(
-    request: Request, credentials: Annotated[HTTPBasicCredentials, Depends(_basic)]
+    request: Request,
+    credentials: Annotated[HTTPBasicCredentials | None, Depends(_basic)],
 ) -> str:
+    """Basic Auth, unless no password is configured - then the dashboard is open."""
     settings: Settings = request.app.state.settings
-    if settings.web_password is None:  # create_app refuses to start without one
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+    if settings.web_password is None or not settings.web_password.get_secret_value():
+        return ANONYMOUS
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": 'Basic realm="FCast"'},
+        )
     user_ok = secrets.compare_digest(
         credentials.username.encode("utf-8"), settings.web_user.encode("utf-8")
     )

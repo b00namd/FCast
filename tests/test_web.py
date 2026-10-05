@@ -138,9 +138,20 @@ def test_static_files_are_served(client: TestClient) -> None:
     assert client.get("/static/app.css", auth=None).status_code == 200
 
 
-def test_app_requires_password(tmp_path: Path) -> None:
-    with pytest.raises(RuntimeError, match="FCAST_WEB_PASSWORD"):
-        create_app(make_settings(tmp_path, web_password=None), run_scheduler=False)
+def test_app_without_password_has_no_login(tmp_path: Path) -> None:
+    """No FCAST_WEB_PASSWORD: the dashboard starts and serves pages without credentials."""
+    app = create_app(make_settings(tmp_path, web_password=None), run_scheduler=False)
+
+    with TestClient(app) as open_client:
+        assert open_client.get("/prices", auth=None).status_code == 200
+
+
+def test_app_with_password_still_demands_it(tmp_path: Path) -> None:
+    app = create_app(make_settings(tmp_path, web_password="s3cret"), run_scheduler=False)
+
+    with TestClient(app) as guarded:
+        assert guarded.get("/prices", auth=None).status_code == 401
+        assert guarded.get("/prices", auth=AUTH).status_code == 200
 
 
 def test_cross_site_post_is_rejected(client: TestClient) -> None:
@@ -1174,3 +1185,118 @@ def test_player_page_shows_card_rating(client: TestClient, collector: Collector)
     overview = client.get("/prices").text
     assert "Spielwert" in overview
     assert ">90<" in overview.replace(" ", "")
+
+
+def test_uev_page_without_data_explains_itself(client: TestClient) -> None:
+    response = client.get("/uev")
+
+    assert response.status_code == 200
+    assert "ÜV-Einkaufsliste" in response.text
+    assert "Noch keine Karten mit Preis" in response.text
+
+
+def test_uev_page_accepts_filters(client: TestClient) -> None:
+    response = client.get("/uev", params={"rating": 86, "max_price": 10_000, "limit": 3})
+
+    assert response.status_code == 200
+    assert 'value="10000"' in response.text
+
+
+def test_portfolio_page_is_empty_at_first(client: TestClient) -> None:
+    response = client.get("/portfolio")
+
+    assert response.status_code == 200
+    assert "Noch keine Positionen" in response.text
+
+
+def test_portfolio_page_shows_profit_after_tax(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 1)
+    with collector.session_factory.begin() as session:
+        player = repo.get_player_by_ea_id(session, 1)
+        assert player is not None
+        held = repo.open_position(session, player, 16_000)
+        sold = repo.open_position(session, player, 10_000)
+        repo.sell_position(session, sold, 12_000)
+        del held
+
+    open_only = client.get("/portfolio")
+    assert open_only.status_code == 200
+    assert "16.000" in open_only.text  # capital tied up in the held position
+    assert "11.400" not in open_only.text  # the sold one is hidden by default
+
+    everything = client.get("/portfolio", params={"show_all": "true"})
+    assert everything.status_code == 200
+    # 12.000 minus the 5 % tax is 11.400, so the profit is 1.400
+    assert "1.400" in everything.text
+
+
+def test_portfolio_buy_form_records_a_position(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 7)
+
+    response = client.post(
+        "/portfolio/buy", data={"ea_id": "7", "price": "4.500"}, follow_redirects=True
+    )
+
+    assert response.status_code == 200
+    assert "4.500" in response.text
+    with collector.session_factory() as session:
+        positions = repo.list_positions(session)
+    assert [p.buy_price for p in positions] == [4_500]
+
+
+def test_portfolio_buy_rejects_unknown_card(client: TestClient) -> None:
+    response = client.post("/portfolio/buy", data={"ea_id": "999", "price": "1000"})
+
+    assert response.status_code == 400
+    assert "unbekannt" in response.text
+
+
+def test_portfolio_sell_form_shows_profit(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 8)
+    with collector.session_factory.begin() as session:
+        player = repo.get_player_by_ea_id(session, 8)
+        assert player is not None
+        repo.open_position(session, player, 10_000)
+    with collector.session_factory() as session:
+        position_id = repo.list_positions(session)[0].id
+
+    client.post(f"/portfolio/{position_id}/sell", data={"price": "14k"}, follow_redirects=True)
+
+    page = client.get("/portfolio", params={"show_all": "true"})
+    # 14.000 minus the 5 % tax is 13.300, so the profit is 3.300
+    assert "3.300" in page.text
+
+
+def test_portfolio_sell_twice_is_rejected(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 9)
+    with collector.session_factory.begin() as session:
+        player = repo.get_player_by_ea_id(session, 9)
+        assert player is not None
+        position = repo.open_position(session, player, 1_000)
+        repo.sell_position(session, position, 2_000)
+    with collector.session_factory() as session:
+        position_id = repo.list_positions(session)[0].id
+
+    response = client.post(f"/portfolio/{position_id}/sell", data={"price": "3000"})
+
+    assert response.status_code == 400
+    assert "already sold" in response.text
+
+
+def test_portfolio_shows_market_price_and_value_now(
+    client: TestClient, collector: Collector
+) -> None:
+    """An open position shows today's market price and what selling now would leave."""
+    add_watch(collector, 11)
+    add_price(collector, 11, 9_000, datetime.now(UTC))
+    with collector.session_factory.begin() as session:
+        player = repo.get_player_by_ea_id(session, 11)
+        assert player is not None
+        repo.open_position(session, player, 10_000)
+
+    page = client.get("/portfolio")
+
+    assert page.status_code == 200
+    assert "9.000" in page.text  # market price
+    # Selling at 9.000 leaves 8.550 after tax, so the position is 1.450 under water.
+    assert "-1.450" in page.text

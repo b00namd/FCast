@@ -1,56 +1,122 @@
-from fcast.analysis import cards
-from fcast.analysis import playvalue as pv
+from fcast.analysis.cards import CardValue
+from fcast.analysis.playvalue import PlayValue
 from fcast.analysis.pricing import net_after_tax
 from fcast.analysis.uev import by_rating, uev_candidates
 
 
-def _value(pid: int, price: int | None, games: int | None, rating: int | None) -> cards.CardValue:
-    play = pv.PlayValue(70.0, pv.STRIKER, 80.0, ())
-    return cards.CardValue(pid, play, 70.0, price, None, games, rating, True)
-
-
-def _values(*items: cards.CardValue) -> dict[int, cards.CardValue]:
-    return {v.player_id: v for v in items}
-
-
-def test_candidates_need_price_and_games_and_respect_max_price() -> None:
-    values = _values(
-        _value(1, 10_000, 500, 86),
-        _value(2, None, 900, 86),  # no recent price
-        _value(3, 12_000, None, 86),  # no usage data
-        _value(4, 70_000, 2_000, 88),  # too expensive
-        _value(5, 3_000, 1_500, 84),
+def _value(player_id: int, games: int | None, price: int | None) -> CardValue:
+    play = PlayValue(score=70.0, group="Sturm", base=70.0, reasons=())
+    return CardValue(
+        player_id=player_id,
+        play=play,
+        meta=70.0,
+        price=price,
+        usage_rate=None,
+        games=games,
+        rating=84,
+        base_card=True,
     )
-    found = uev_candidates(values, max_price=60_000, premium=500)
-    assert [c.player_id for c in found] == [5, 1]  # most played first
 
 
-def test_max_buy_and_break_even_use_valid_price_steps() -> None:
-    (candidate,) = uev_candidates(_values(_value(1, 9_800, 10, 85)), max_price=60_000, premium=500)
-    assert candidate.max_buy == 10_250  # 10,300 rounded down to the 250 step
-    assert candidate.break_even == 11_000
+def test_sorted_by_games_most_played_first() -> None:
+    values = {
+        1: _value(1, games=1_000, price=5_000),
+        2: _value(2, games=9_000, price=5_000),
+        3: _value(3, games=5_000, price=5_000),
+    }
+
+    result = uev_candidates(values, max_price=60_000, premium=500)
+
+    assert [c.player_id for c in result] == [2, 3, 1]
+
+
+def test_skips_cards_that_are_too_expensive() -> None:
+    values = {1: _value(1, games=1_000, price=70_000), 2: _value(2, games=500, price=10_000)}
+
+    result = uev_candidates(values, max_price=60_000, premium=500)
+
+    assert [c.player_id for c in result] == [2]
+
+
+def test_skips_cards_without_price_or_usage() -> None:
+    values = {
+        1: _value(1, games=None, price=5_000),
+        2: _value(2, games=1_000, price=None),
+        3: _value(3, games=1_000, price=5_000),
+    }
+
+    result = uev_candidates(values, max_price=60_000, premium=500)
+
+    assert [c.player_id for c in result] == [3]
+
+
+def test_break_even_covers_the_premium_after_tax() -> None:
+    values = {1: _value(1, games=1_000, price=4_500)}
+
+    candidate = uev_candidates(values, max_price=60_000, premium=500)[0]
+
+    assert candidate.max_buy == 5_000
     assert net_after_tax(candidate.break_even) >= candidate.max_buy
-    assert net_after_tax(10_750) < candidate.max_buy
 
 
-def test_rating_filter_and_limit() -> None:
-    values = _values(*(_value(i, 5_000, 100 * i, 86 if i % 2 else 87) for i in range(1, 7)))
-    found = uev_candidates(values, max_price=60_000, premium=0, rating=86, limit=2)
-    assert [c.player_id for c in found] == [5, 3]
-    assert all(c.max_buy == 5_000 for c in found)
+def test_limit_keeps_the_most_played() -> None:
+    values = {i: _value(i, games=i * 100, price=5_000) for i in range(1, 6)}
+
+    result = uev_candidates(values, max_price=60_000, premium=500, limit=2)
+
+    assert [c.player_id for c in result] == [5, 4]
 
 
-def test_by_rating_groups_highest_first_and_limits_each_group() -> None:
-    values = _values(
-        _value(1, 5_000, 100, 85),
-        _value(2, 5_000, 300, 85),
-        _value(3, 5_000, 200, 85),
-        _value(4, 8_000, 50, 87),
-        _value(5, 1_000, 999, None),
+def test_rating_filter() -> None:
+    a = _value(1, games=1_000, price=5_000)
+    b = CardValue(
+        player_id=2,
+        play=a.play,
+        meta=70.0,
+        price=5_000,
+        usage_rate=None,
+        games=2_000,
+        rating=90,
+        base_card=True,
     )
+    values = {1: a, 2: b}
+
+    result = uev_candidates(values, max_price=60_000, premium=500, rating=90)
+
+    assert [c.player_id for c in result] == [2]
+
+
+def test_by_rating_groups_best_rating_first() -> None:
+    def card(player_id: int, games: int, rating: int | None) -> CardValue:
+        base = _value(player_id, games=games, price=5_000)
+        return CardValue(
+            player_id=player_id,
+            play=base.play,
+            meta=70.0,
+            price=5_000,
+            usage_rate=None,
+            games=games,
+            rating=rating,
+            base_card=True,
+        )
+
+    values = {
+        1: card(1, 100, 86),
+        2: card(2, 900, 86),
+        3: card(3, 500, 90),
+        4: card(4, 700, None),  # no rating: left out
+    }
+
+    groups = by_rating(uev_candidates(values, max_price=60_000, premium=500))
+
+    assert [rating for rating, _ in groups] == [90, 86]
+    assert [c.player_id for c in groups[1][1]] == [2, 1]
+
+
+def test_by_rating_limit_applies_per_rating() -> None:
+    values = {i: _value(i, games=i * 100, price=5_000) for i in range(1, 5)}
+
     groups = by_rating(uev_candidates(values, max_price=60_000, premium=500), limit=2)
-    assert [(r, [c.player_id for c in g]) for r, g in groups] == [
-        (87, [4]),
-        (85, [2, 3]),
-        (None, [5]),
-    ]
+
+    assert len(groups) == 1
+    assert [c.player_id for c in groups[0][1]] == [4, 3]

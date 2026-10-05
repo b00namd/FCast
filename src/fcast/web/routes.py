@@ -18,6 +18,9 @@ from fcast.alerts.notifier import Notification, NotifierError
 from fcast.analysis import cards
 from fcast.analysis import service as analysis
 from fcast.analysis import signals as sig
+from fcast.analysis.pricing import break_even_sell_price
+from fcast.analysis.pricing import profit as net_profit
+from fcast.analysis.uev import by_rating, uev_candidates
 from fcast.backtest import engine
 from fcast.backtest import service as bt
 from fcast.backtest.curves import OFFSETS_H
@@ -27,7 +30,15 @@ from fcast.config import Platform, Settings, is_clock_time
 from fcast.db import repositories as repo
 from fcast.db.backup import list_backups
 from fcast.db.base import utcnow
-from fcast.db.models import LeakItem, LinkType, Player, Promo, TotwActual, TotwPrediction
+from fcast.db.models import (
+    LeakItem,
+    LinkType,
+    Player,
+    PositionStatus,
+    Promo,
+    TotwActual,
+    TotwPrediction,
+)
 from fcast.db.session import session_scope
 from fcast.promos import service as promo_service
 from fcast.radar import service as radar_service
@@ -1005,3 +1016,211 @@ def _parse_day(value: str | None, tz: Any) -> datetime | None:
     except ValueError:
         return None
     return datetime.combine(day, time(19, 0), tzinfo=tz).astimezone(UTC)
+
+
+# --- ÜV shopping list --------------------------------------------------------------------
+
+
+@pages.get("/uev", response_class=HTMLResponse)
+def uev_page(
+    request: Request,
+    max_price: Annotated[int, Query(ge=1)] = 60_000,
+    premium: Annotated[int, Query(ge=0)] = 500,
+    limit: Annotated[int, Query(ge=1, le=50)] = 5,
+    rating: Annotated[int | None, Query(ge=1)] = None,
+) -> HTMLResponse:
+    settings = _settings(request)
+    now = utcnow()
+    with _db(request) as session:
+        values = cards.card_values(session, settings, now)
+        candidates = uev_candidates(values, max_price=max_price, premium=premium, rating=rating)
+        players = {
+            player.id: player
+            for player in session.scalars(
+                select(Player).where(Player.id.in_([c.player_id for c in candidates]))
+            )
+        }
+        return _render(
+            request,
+            "uev.html",
+            {
+                "nav": "uev",
+                "groups": by_rating(candidates, limit),
+                "players": players,
+                "styles": {player_id: player.chem_style for player_id, player in players.items()},
+                "max_price": max_price,
+                "premium": premium,
+                "limit": limit,
+                "rating": rating,
+                "ratings": sorted(
+                    {c.rating for c in candidates if c.rating is not None}, reverse=True
+                ),
+            },
+        )
+
+
+# --- portfolio ---------------------------------------------------------------------------
+
+OPEN_POSITIONS = [PositionStatus.HOLDING, PositionStatus.LISTED]
+
+
+def _portfolio_context(
+    session: Session,
+    settings: Settings,
+    show_all: bool,
+    errors: list[str] | None = None,
+) -> dict[str, Any]:
+    positions = repo.list_positions(session, None if show_all else OPEN_POSITIONS)
+    rows = []
+    realised = 0
+    tied_up = 0
+    unrealised = 0
+    for position in positions:
+        gain = None
+        market = None
+        at_market = None
+        if position.status is PositionStatus.SOLD and position.sell_price is not None:
+            gain = net_profit(position.buy_price, position.sell_price)
+            realised += gain
+        else:
+            tied_up += position.buy_price
+            snapshot = repo.latest_snapshot(session, position.player, settings.platform)
+            if snapshot is not None and snapshot.price is not None:
+                market = snapshot.price
+                # What selling at today's market price would leave after the tax.
+                at_market = net_profit(position.buy_price, market)
+                unrealised += at_market
+        rows.append(
+            {
+                "position": position,
+                "break_even": break_even_sell_price(position.buy_price),
+                "profit": gain,
+                "market": market,
+                "at_market": at_market,
+            }
+        )
+    rows.reverse()  # newest purchase first
+    return {
+        "nav": "portfolio",
+        "rows": rows,
+        "realised": realised,
+        "tied_up": tied_up,
+        "unrealised": unrealised,
+        "show_all": show_all,
+        "errors": errors or [],
+    }
+
+
+@pages.get("/portfolio", response_class=HTMLResponse)
+def portfolio_page(
+    request: Request,
+    show_all: Annotated[bool, Query()] = False,
+) -> HTMLResponse:
+    settings = _settings(request)
+    with _db(request) as session:
+        return _render(request, "portfolio.html", _portfolio_context(session, settings, show_all))
+
+
+def _back_to_portfolio() -> RedirectResponse:
+    return RedirectResponse("/portfolio", status_code=303)
+
+
+def _amount(label: str, text: str | None, errors: list[str]) -> int | None:
+    try:
+        value = forms.parse_coins(text)
+    except ValueError as exc:
+        errors.append(f"{label}: {exc}")
+        return None
+    if value is None:
+        errors.append(f"{label} fehlt")
+    return value
+
+
+@pages.post("/portfolio/buy")
+def portfolio_buy(
+    request: Request,
+    ea_id: OptionalFormStr = None,
+    price: OptionalFormStr = None,
+) -> Response:
+    errors: list[str] = []
+    card_id: int | None = None
+    try:
+        card_id = forms.parse_ea_id(ea_id)
+    except ValueError as exc:
+        errors.append(str(exc))
+    amount = _amount("Kaufpreis", price, errors)
+    with _db(request) as session:
+        if card_id is not None and amount is not None:
+            player = repo.get_player_by_ea_id(session, card_id)
+            if player is None:
+                errors.append(f"Karte {card_id} ist unbekannt - erst auf die Watchlist setzen.")
+            else:
+                repo.open_position(session, player, amount)
+                return _back_to_portfolio()
+        return _render(
+            request,
+            "portfolio.html",
+            _portfolio_context(session, _settings(request), False, errors),
+            status_code=400,
+        )
+
+
+@pages.post("/portfolio/{position_id}/listed")
+def portfolio_listed(
+    request: Request,
+    position_id: int,
+    price: OptionalFormStr = None,
+) -> Response:
+    errors: list[str] = []
+    amount = _amount("Preis", price, errors)
+    with _db(request) as session:
+        if amount is not None:
+            try:
+                repo.mark_listed(session, repo.get_position(session, position_id), amount)
+                return _back_to_portfolio()
+            except (repo.NotFoundError, repo.InvalidStateError) as exc:
+                errors.append(str(exc))
+        return _render(
+            request,
+            "portfolio.html",
+            _portfolio_context(session, _settings(request), False, errors),
+            status_code=400,
+        )
+
+
+@pages.post("/portfolio/{position_id}/sell")
+def portfolio_sell(
+    request: Request,
+    position_id: int,
+    price: OptionalFormStr = None,
+) -> Response:
+    errors: list[str] = []
+    amount = _amount("Verkaufspreis", price, errors)
+    with _db(request) as session:
+        if amount is not None:
+            try:
+                repo.sell_position(session, repo.get_position(session, position_id), amount)
+                return _back_to_portfolio()
+            except (repo.NotFoundError, repo.InvalidStateError) as exc:
+                errors.append(str(exc))
+        return _render(
+            request,
+            "portfolio.html",
+            _portfolio_context(session, _settings(request), False, errors),
+            status_code=400,
+        )
+
+
+@pages.post("/portfolio/{position_id}/delete")
+def portfolio_delete(request: Request, position_id: int) -> Response:
+    with _db(request) as session:
+        try:
+            repo.remove_position(session, repo.get_position(session, position_id))
+        except repo.NotFoundError as exc:
+            return _render(
+                request,
+                "portfolio.html",
+                _portfolio_context(session, _settings(request), False, [str(exc)]),
+                status_code=404,
+            )
+        return _back_to_portfolio()

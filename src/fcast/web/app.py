@@ -77,7 +77,7 @@ def create_app(
 ) -> FastAPI:
     settings = settings or get_settings()
     if settings.web_password is None or not settings.web_password.get_secret_value():
-        raise RuntimeError("FCAST_WEB_PASSWORD must be set to start the dashboard")
+        logger.warning("FCAST_WEB_PASSWORD is not set - the dashboard has no login")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
