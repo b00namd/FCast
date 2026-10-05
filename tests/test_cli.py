@@ -97,7 +97,10 @@ def test_collect_once_with_manual_csv(db_path: Path, monkeypatch: pytest.MonkeyP
 
     result = runner.invoke(app, ["collect", "--once"])
     assert result.exit_code == 0, result.output
-    assert "2 players: 1 new snapshots, 0 unchanged, 0 extinct, 0 untradeable, 1 without price" in result.output
+    assert (
+        "2 players: 1 new snapshots, 0 unchanged, 0 extinct, 0 untradeable, 1 without price"
+        in result.output
+    )
 
     result = runner.invoke(app, ["collect", "--once"])
     assert "0 new snapshots, 1 unchanged" in result.output
