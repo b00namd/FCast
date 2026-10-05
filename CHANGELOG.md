@@ -24,6 +24,11 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   tragen meist **keinen Chemie-Stil**. Eine Karte mit dem beliebten Stil ist einem Käufer mehr
   wert – gesucht wird also eine solche nahe am Grundpreis. Welche Angebote einen Stil tragen,
   steht nicht in den Preisdaten; dieser Schritt bleibt Handarbeit.
+- **Weboberfläche:** Seite „ÜV“ (`/uev`) mit Filtern für Bewertung, Höchstpreis, Aufschlag und
+  Karten je Bewertung; zeigt zusätzlich den Chemie-Stil der Karte. Karten ohne Bewertung fehlen
+  in der gruppierten Ansicht.
+- **Behoben (05.10.):** „Max. Kauf“ war Marktpreis + Aufschlag ohne Rundung und damit oft kein
+  gültiger Preis (9.800 + 500 = 10.300). Jetzt auf die Preisstufe abgerundet (10.250).
 
 ### Phase 12 – Portfolio & Verkaufs-Tracking
 - **Käufe und Verkäufe erfassen:** `fcast portfolio buy <ea-id> <preis>`, `listed <id> <preis>`,
@@ -32,6 +37,11 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   bzw. Verlust; `list` zeigt je Position den Break-even und summiert realisierten Gewinn und
   gebundenes Kapital. Gerechnet wird mit `analysis.pricing` (5 % Steuer, gültige Preisstufen).
 - Im Repository fehlte nur `remove_position`; die übrigen Portfolio-Funktionen gab es bereits.
+- **Weboberfläche:** Seite „Portfolio“ (`/portfolio`): Kauf eintragen (EA-ID oder Link, Preise
+  wie „4.500“ oder „45k“), als eingestellt oder verkauft markieren, löschen. Je offener Position
+  Marktpreis, Break-even und was ein Verkauf zum Marktpreis jetzt brächte.
+- **Dashboard-Login optional:** Ist `FCAST_WEB_PASSWORD` leer, startet das Dashboard ohne Login
+  (nur im LAN erreichbar) und schreibt eine Warnung ins Log; mit Passwort gilt Basic Auth wie bisher.
 - Dashboard und Backtest bleiben unberührt – der Backtest spielt weiterhin Regeln auf den
   gespeicherten Marktpreisen nach, unabhängig von den eigenen Positionen.
 

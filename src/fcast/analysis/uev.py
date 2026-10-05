@@ -12,7 +12,7 @@ Which offers actually carry a style is not in the price data - that part stays m
 from dataclasses import dataclass
 
 from fcast.analysis.cards import CardValue
-from fcast.analysis.pricing import break_even_sell_price
+from fcast.analysis.pricing import break_even_sell_price, round_to_price_step
 
 
 @dataclass(frozen=True)
@@ -42,8 +42,8 @@ def uev_candidates(
             player_id=value.player_id,
             games=value.games,
             price=value.price,
-            max_buy=value.price + premium,
-            break_even=break_even_sell_price(value.price + premium),
+            max_buy=(max_buy := round_to_price_step(value.price + premium, "down")),
+            break_even=break_even_sell_price(max_buy),
             rating=value.rating,
         )
         for value in values.values()

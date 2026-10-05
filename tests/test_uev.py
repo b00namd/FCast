@@ -1,6 +1,6 @@
 from fcast.analysis.cards import CardValue
 from fcast.analysis.playvalue import PlayValue
-from fcast.analysis.pricing import net_after_tax
+from fcast.analysis.pricing import is_valid_price, net_after_tax
 from fcast.analysis.uev import by_rating, uev_candidates
 
 
@@ -120,3 +120,13 @@ def test_by_rating_limit_applies_per_rating() -> None:
 
     assert len(groups) == 1
     assert [c.player_id for c in groups[0][1]] == [4, 3]
+
+
+def test_max_buy_is_a_valid_market_price() -> None:
+    values = {1: _value(1, games=1_000, price=9_800)}
+
+    candidate = uev_candidates(values, max_price=60_000, premium=500)[0]
+
+    assert candidate.max_buy == 10_250  # 10.300 is no valid price: 250 steps above 10.000
+    assert is_valid_price(candidate.max_buy)
+    assert candidate.break_even == 11_000
