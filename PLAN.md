@@ -191,7 +191,15 @@ stehen. (Portfolio/Verkaufs-Tracking hat der Nutzer bewusst zurückgestellt, sie
 
 ---
 
-## Phase 14 – Selbstlernende Gewichtung
+## ✅ Phase 14 – Coinstand & bezahlbare Signale (erledigt)
+> **Stand 05.10.2026:** Coinstand im Portfolio eintragen (Seite oder `fcast portfolio coins`);
+> Käufe und Verkäufe (nach Steuer) rechnen ihn fort, neu eintragen setzt ihn zurück. Kauf-Signale
+> (Kauf-Dip, Promo-Vorkauf, ÜV-Chance, Radar) über dem Coinstand werden nicht gepusht und auf
+> „Signale“ und „Radar“ als „zu teuer“ markiert. Verkaufsziel und Holo-ÜV bleiben unberührt.
+
+---
+
+## Phase 15 – Selbstlernende Gewichtung
 Ziel: Signale, die sich im Backtest bewährt haben, stärker gewichten – und schwache leiser stellen.
 
 **Aufgaben**
@@ -209,7 +217,7 @@ Ziel: Signale, die sich im Backtest bewährt haben, stärker gewichten – und s
 
 ---
 
-## Phase 15 – SBC-Futter vor großen SBCs
+## Phase 16 – SBC-Futter vor großen SBCs
 > Futter-Index je Rating 82–90 und Signal „Futter zieht an“ gibt es seit Phase 10. Offen ist der
 > Vorlauf: Futter kaufen, **bevor** eine große SBC erscheint.
 
@@ -228,7 +236,7 @@ Ziel: Signale, die sich im Backtest bewährt haben, stärker gewichten – und s
 
 ---
 
-## Phase 16 – Reddit-Sentiment
+## Phase 17 – Reddit-Sentiment
 Ziel: Hype um einzelne Karten früh sehen (Hype-Score als zusätzliches Radar-Signal).
 
 **Aufgaben**
@@ -245,7 +253,7 @@ Ziel: Hype um einzelne Karten früh sehen (Hype-Score als zusätzliches Radar-Si
 
 ---
 
-## Phase 17 – SBC-Lösungsrechner mit eigenem Club
+## Phase 18 – SBC-Lösungsrechner mit eigenem Club
 Ziel: günstigste Lösung für eine SBC aus eigenen Karten plus Markt.
 
 **Aufgaben**

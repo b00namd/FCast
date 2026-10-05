@@ -16,12 +16,12 @@ uv run mypy
 ## Docker
 
 ```bash
-cp .env.example .env   # FCAST_WEB_PASSWORD setzen!
+cp .env.example .env   # FCAST_WEB_PASSWORD setzen, wenn ein Login gewünscht ist
 docker compose up -d --build
 ```
 
-Dashboard: `http://<host>:8000` (Basic Auth). Nur im Heimnetz betreiben, für Zugriff von
-unterwegs ein VPN nutzen.
+Dashboard: `http://<host>:8000`. Mit gesetztem `FCAST_WEB_PASSWORD` fragt es Basic Auth ab,
+ohne läuft es ohne Login – nur im Heimnetz betreiben, für Zugriff von unterwegs ein VPN nutzen.
 
 Nützliche Befehle im Container: `docker compose exec fcast fcast sources status`,
 `docker compose exec fcast fcast collect --once`.

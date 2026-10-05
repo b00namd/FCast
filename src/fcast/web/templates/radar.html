@@ -49,7 +49,7 @@
       <td><a href="/players/{{ hit.player.ea_id }}">{{ hit.player.display_name }}</a>
         {% if hit.player.card_type %}<br><small class="muted">{{ hit.player.card_type }}</small>{% endif %}</td>
       <td class="hide-sm">{% if hit.on_watchlist %}Watchlist{% else %}{{ lists.get(hit.list_name, hit.list_name or "–") }}{% endif %}</td>
-      <td class="num">{{ hit.price | coins }}</td>
+      <td class="num">{{ hit.price | coins }}{% if too_expensive[loop.index0] %}<br><small class="badge bad" title="Mehr als dein Coinstand – kein Push">zu teuer</small>{% endif %}</td>
       <td class="num hide-sm">{% if hit.value %}{{ hit.value.play.score | round | int }}{% else %}<span class="muted">–</span>{% endif %}</td>
       <td>
         {% for s in hit.signals %}

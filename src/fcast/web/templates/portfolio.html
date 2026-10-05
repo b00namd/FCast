@@ -13,6 +13,25 @@
 </article>
 {% endif %}
 
+<form method="post" action="/portfolio/coins">
+  <fieldset role="group">
+    <input type="text" name="coins" placeholder="Aktueller Coinstand, z. B. 250k" aria-label="Coinstand" required>
+    <button type="submit" class="secondary">Coinstand setzen</button>
+  </fieldset>
+  <small class="muted">
+    {% if coins %}
+      <strong>Coinstand: {{ coins.coins | coins }}</strong>
+      – eingetragen {{ coins.entered | coins }} am {{ coins.entered_at | dt }},
+      seitdem {{ coins.spent | coins }} ausgegeben und {{ coins.received | coins }} nach Steuer eingenommen.
+      Belohnungen, Packs und SBCs sieht FCast nicht – weicht der Stand ab, einfach neu eintragen.
+      Kauf-Signale über dem Coinstand werden nicht gepusht.
+    {% else %}
+      Noch kein Coinstand eingetragen. Danach rechnen Käufe und Verkäufe ihn fort, und es kommen nur
+      Kauf-Signale, die du dir leisten kannst.
+    {% endif %}
+  </small>
+</form>
+
 <p>
   <strong>Realisierter Gewinn:</strong>
   <span class="{% if realised > 0 %}up{% elif realised < 0 %}down{% endif %}">{{ realised | coins }}</span>

@@ -25,6 +25,7 @@ from fcast.analysis.service import current_signals
 from fcast.config import Settings
 from fcast.db import repositories as repo
 from fcast.db.session import session_scope
+from fcast.portfolio import coins as wallet
 from fcast.radar import service as radar
 from fcast.radar import signals as rs
 from fcast.sources import futbin
@@ -42,6 +43,7 @@ class Outcome(StrEnum):
     COOLDOWN = "cooldown"
     QUIET = "quiet"
     FILTERED = "filtered"
+    TOO_EXPENSIVE = "too_expensive"  # buy price above the coin balance
     DISABLED = "disabled"
     FAILED = "failed"
 
@@ -53,6 +55,7 @@ class Candidate:
     notification: Notification
     expected_profit: int | None = None
     kind: str = "signal"  # "signal" or "system"
+    buy_price: int | None = None  # coins needed to act on it; None for sell signals
 
 
 @dataclass
@@ -226,6 +229,7 @@ class AlertEngine:
                     ea_id=signal.ea_id,
                     expected_profit=signal.expected_profit,
                     notification=signal_notification(signal, self.settings.dashboard_url, ref),
+                    buy_price=wallet.buy_price(signal),
                 )
             )
         return found
@@ -238,6 +242,7 @@ class AlertEngine:
                 rule=RADAR,
                 ea_id=hit.player.ea_id,
                 notification=radar_notification(hit, self.settings.dashboard_url),
+                buy_price=hit.price,
             )
             for hit in radar.hits(session, self.settings, now)
             if hit.potential >= threshold
@@ -254,10 +259,17 @@ class AlertEngine:
         return found
 
     def decide(
-        self, session: Session, candidate: Candidate, config: AlertConfig, now: datetime
+        self,
+        session: Session,
+        candidate: Candidate,
+        config: AlertConfig,
+        now: datetime,
+        coins: wallet.CoinBalance | None = None,
     ) -> Outcome:
         if not config.enabled or not self._rule_enabled(candidate, config):
             return Outcome.DISABLED
+        if not wallet.affordable(candidate.buy_price, coins):
+            return Outcome.TOO_EXPENSIVE
         if (
             candidate.kind == "signal"
             and config.min_profit
@@ -303,9 +315,11 @@ class AlertEngine:
         candidates = self.system_candidates(paused or {}, failed_players)
         candidates += self.signal_candidates(session, now)
         candidates += self.radar_candidates(session, now)
+        coins = wallet.balance(session)
         report = AlertReport()
         for candidate in candidates:
-            report.decisions.append((candidate, self.decide(session, candidate, config, now)))
+            outcome = self.decide(session, candidate, config, now, coins)
+            report.decisions.append((candidate, outcome))
         return report
 
     async def process(

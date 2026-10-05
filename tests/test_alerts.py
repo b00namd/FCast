@@ -386,3 +386,22 @@ async def test_radar_alerts_can_be_switched_off(factory: sessionmaker[Session]) 
         save_alert_config(session, AlertConfig(radar=False))
     report = await AlertEngine(FakeNotifier(), make_settings()).process(factory, NOON)
     assert report.count(Outcome.DISABLED) == 2
+
+
+async def test_buy_signals_above_the_coin_balance_are_not_pushed(
+    factory: sessionmaker[Session],
+) -> None:
+    from fcast.portfolio import coins as wallet
+
+    seed_dip(factory)  # buy at 8.000
+    with factory.begin() as session:
+        wallet.set_balance(session, 5_000, now=NOON - timedelta(hours=1))
+    notifier = FakeNotifier()
+    report = await AlertEngine(notifier, make_settings()).process(factory, NOON)
+    assert report.count(Outcome.TOO_EXPENSIVE) == 1
+    assert notifier.sent == []
+
+    with factory.begin() as session:
+        wallet.set_balance(session, 8_000, now=NOON)
+    report = await AlertEngine(notifier, make_settings()).process(factory, NOON)
+    assert report.count(Outcome.SENT) == 1

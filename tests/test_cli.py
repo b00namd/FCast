@@ -437,3 +437,13 @@ def test_uev_command(db_path: Path) -> None:
     assert "11.000" in result.output  # break-even
     assert "Teuer" not in result.output
     assert "Teuer" in runner.invoke(app, ["uev", "--max-price", "100000", "--flat"]).output
+
+
+def test_portfolio_coins_command(db_path: Path) -> None:
+    assert runner.invoke(app, ["db", "upgrade"]).exit_code == 0
+    assert "No coin balance yet" in runner.invoke(app, ["portfolio", "coins"]).output
+
+    result = runner.invoke(app, ["portfolio", "coins", "250000"])
+    assert result.exit_code == 0, result.output
+    assert "Coin balance: 250.000" in result.output
+    assert "Coin balance: 250.000" in runner.invoke(app, ["portfolio", "coins"]).output

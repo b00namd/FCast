@@ -33,7 +33,7 @@
         {% if s.score is not none %}<small class="muted">{{ s.score | round | int }}</small>{% endif %}
       </td>
       <td><a href="/players/{{ s.ea_id }}">{{ s.name }}</a></td>
-      <td class="num">{{ s.price | coins }}</td>
+      <td class="num">{{ s.price | coins }}{% if too_expensive[loop.index0] %}<br><small class="badge bad" title="Mehr als dein Coinstand – kein Push">zu teuer</small>{% endif %}</td>
       <td class="num hide-sm">{{ s.reference | coins }}</td>
       <td class="num">
         {% if s.rule.value == 'BUY_DIP' %}<small class="muted">max.</small>{% else %}<small class="muted">einstellen</small>{% endif %}
@@ -46,6 +46,6 @@
   </tbody>
 </table>
 </div>
-<p class="muted"><small>Profit nach 5 % EA-Steuer. Bei „ÜV-Chance“: Kauf zum aktuellen Preis und Einstellen zur Empfehlung; bei extinct nur für Karten, die du schon hast.</small></p>
+<p class="muted"><small>Profit nach 5 % EA-Steuer. Bei „ÜV-Chance“: Kauf zum aktuellen Preis und Einstellen zur Empfehlung; bei extinct nur für Karten, die du schon hast.{% if coins %} „zu teuer“: Kaufpreis über deinem Coinstand ({{ coins.coins | coins }}) – dafür kommt kein Push.{% endif %}</small></p>
 {% endif %}
 {% endblock %}

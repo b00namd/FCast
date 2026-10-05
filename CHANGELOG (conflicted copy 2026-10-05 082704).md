@@ -12,46 +12,6 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   eingebetteten Kartendaten). Der Collector wertet das wie „extinct“ als Antwort: kein Fehler,
   keine Ersatzanfrage bei FUTNext, eigener Zähler „nicht handelbar“ im Status.
 
-### Geändert
-- **Marktpreis je offener Position** im Portfolio: neue Spalten „Markt“ und „Jetzt“ – was ein
-  sofortiger Verkauf zum aktuellen Marktpreis nach Steuer brächte – sowie die Summe darüber.
-  Damit ist auf einen Blick zu sehen, ob eine offene Position im Plus steht und ob der eigene
-  Einstellpreis noch zum Markt passt.
-- `tests/test_cli.py`: zu lange Zeile umgebrochen, `ruff check` läuft wieder ohne Befund durch.
-
-- **Dashboard-Login optional:** Ohne gesetztes `FCAST_WEB_PASSWORD` startet das Dashboard jetzt
-  ohne Basic Auth, statt den Start zu verweigern – beim Start steht eine Warnung im Log. Mit
-  gesetztem Passwort bleibt alles wie bisher. Gedacht für den Betrieb rein im Heimnetz; der
-  Schutz gegen Cross-Site-Posts (`SameOriginMiddleware`) bleibt in beiden Fällen aktiv.
-
-### Phase 14 – Dashboard: ÜV und Portfolio
-- **Seite „ÜV"** (`/uev`): die Einkaufsliste aus Phase 13 im Browser, nach Bewertung gruppiert,
-  mit Filtern für Bewertung, Höchstpreis, Aufschlag und Anzahl je Bewertung. Neu dabei: der
-  **meistgenutzte Chemie-Stil** je Karte (aus `players.chem_style`) als farbiger Chip – damit
-  steht in der Liste, wonach im Transfermarkt zu suchen ist.
-- **Seite „Portfolio"** (`/portfolio`): offene und verkaufte Positionen mit Break-even und
-  Gewinn nach Steuer, dazu realisierter Gewinn und gebundenes Kapital. `?show_all=true` zeigt
-  auch die verkauften.
-- **Eintragen direkt im Dashboard:** Kauf anlegen (EA-ID oder FUT.GG-Link plus Preis),
-  je Position „Verkauft“, „Eingestellt“ und „Löschen“. Preise dürfen getippt werden wie man sie
-  liest – `4500`, `4.500` oder `45k` (`forms.parse_coins`). Nach dem Absenden wird auf die Seite
-  zurückgeleitet (POST/Redirect/GET), Fehler stehen oben auf der Seite.
-- Beide Seiten in der Hauptnavigation; die CLI-Befehle (`fcast portfolio …`) bleiben daneben
-  bestehen.
-
-### Phase 14 – Coinstand & bezahlbare Signale
-- **Coinstand im Portfolio:** auf der Seite „Portfolio“ oder mit `fcast portfolio coins <betrag>`
-  eintragen. Danach rechnen erfasste Käufe (−Kaufpreis) und Verkäufe (+Erlös nach 5 % Steuer)
-  ihn fort; gelöschte Positionen fallen wieder heraus. Belohnungen, Packs und SBCs sieht FCast
-  nicht – weicht der Stand vom Spiel ab, einfach neu eintragen. Gespeichert in den
-  App-Einstellungen, keine Migration.
-- **Nur bezahlbare Pushes:** Kauf-Dip, Promo-Vorkauf, ÜV-Chance und Radar-Treffer, deren Preis
-  über dem Coinstand liegt, werden nicht gepusht (`too_expensive` im Alert-Testlauf). Verkaufsziel,
-  Holo-ÜV und ÜV-Chancen bei extinct (betreffen eigene Karten) kommen weiter. Ohne Coinstand
-  wird nichts gefiltert.
-- Seiten „Signale“ und „Radar“ markieren solche Karten als **„zu teuer“**; `fcast portfolio list`
-  zeigt den Coinstand mit an.
-
 ### Phase 13 – ÜV-Einkaufsliste
 - **`fcast uev`** listet die meistgespielten Karten (FUTBIN-Spielzähler), die noch günstig zu
   haben sind – **nach Kartenbewertung gruppiert**, innerhalb einer Bewertung die beliebtesten
@@ -64,6 +24,11 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   tragen meist **keinen Chemie-Stil**. Eine Karte mit dem beliebten Stil ist einem Käufer mehr
   wert – gesucht wird also eine solche nahe am Grundpreis. Welche Angebote einen Stil tragen,
   steht nicht in den Preisdaten; dieser Schritt bleibt Handarbeit.
+- **Weboberfläche:** Seite „ÜV“ (`/uev`) mit Filtern für Bewertung, Höchstpreis, Aufschlag und
+  Karten je Bewertung; zeigt zusätzlich den Chemie-Stil der Karte. Karten ohne Bewertung fehlen
+  in der gruppierten Ansicht.
+- **Behoben (05.10.):** „Max. Kauf“ war Marktpreis + Aufschlag ohne Rundung und damit oft kein
+  gültiger Preis (9.800 + 500 = 10.300). Jetzt auf die Preisstufe abgerundet (10.250).
 
 ### Phase 12 – Portfolio & Verkaufs-Tracking
 - **Käufe und Verkäufe erfassen:** `fcast portfolio buy <ea-id> <preis>`, `listed <id> <preis>`,
@@ -72,6 +37,11 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   bzw. Verlust; `list` zeigt je Position den Break-even und summiert realisierten Gewinn und
   gebundenes Kapital. Gerechnet wird mit `analysis.pricing` (5 % Steuer, gültige Preisstufen).
 - Im Repository fehlte nur `remove_position`; die übrigen Portfolio-Funktionen gab es bereits.
+- **Weboberfläche:** Seite „Portfolio“ (`/portfolio`): Kauf eintragen (EA-ID oder Link, Preise
+  wie „4.500“ oder „45k“), als eingestellt oder verkauft markieren, löschen. Je offener Position
+  Marktpreis, Break-even und was ein Verkauf zum Marktpreis jetzt brächte.
+- **Dashboard-Login optional:** Ist `FCAST_WEB_PASSWORD` leer, startet das Dashboard ohne Login
+  (nur im LAN erreichbar) und schreibt eine Warnung ins Log; mit Passwort gilt Basic Auth wie bisher.
 - Dashboard und Backtest bleiben unberührt – der Backtest spielt weiterhin Regeln auf den
   gespeicherten Marktpreisen nach, unabhängig von den eigenen Positionen.
 

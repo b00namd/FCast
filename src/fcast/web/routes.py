@@ -40,6 +40,7 @@ from fcast.db.models import (
     TotwPrediction,
 )
 from fcast.db.session import session_scope
+from fcast.portfolio import coins as wallet
 from fcast.promos import service as promo_service
 from fcast.radar import service as radar_service
 from fcast.sources import futbin
@@ -145,11 +146,16 @@ def signals_page(request: Request, rule: str | None = None) -> HTMLResponse:
     selected = next((r for r in sig.Rule if r.value == rule), None)
     with _db(request) as session:
         found = analysis.current_signals(session, _settings(request), utcnow(), selected)
+        coins = wallet.balance(session)
         return _render(
             request,
             "signals.html",
             {
                 "signals": found,
+                "coins": coins,
+                "too_expensive": [
+                    not wallet.affordable(wallet.buy_price(signal), coins) for signal in found
+                ],
                 "rules": list(sig.Rule),
                 "labels": sig.RULE_LABELS,
                 "selected": selected,
@@ -714,12 +720,16 @@ def radar_page(request: Request) -> HTMLResponse:
     settings = _settings(request)
     now = utcnow()
     with _db(request) as session:
+        hits = radar_service.hits(session, settings, now)
+        coins = wallet.balance(session)
         return _render(
             request,
             "radar.html",
             {
                 "nav": "radar",
-                "hits": radar_service.hits(session, settings, now),
+                "hits": hits,
+                "coins": coins,
+                "too_expensive": [not wallet.affordable(hit.price, coins) for hit in hits],
                 "agreement": cards.agreement(cards.card_values(session, settings, now)),
                 "fodder": radar_service.fodder(session, settings, now),
                 "status": radar_service.status(session, settings, now),
@@ -1108,6 +1118,7 @@ def _portfolio_context(
         "unrealised": unrealised,
         "show_all": show_all,
         "errors": errors or [],
+        "coins": wallet.balance(session),
     }
 
 
@@ -1157,6 +1168,22 @@ def portfolio_buy(
             else:
                 repo.open_position(session, player, amount)
                 return _back_to_portfolio()
+        return _render(
+            request,
+            "portfolio.html",
+            _portfolio_context(session, _settings(request), False, errors),
+            status_code=400,
+        )
+
+
+@pages.post("/portfolio/coins")
+def portfolio_coins(request: Request, coins: OptionalFormStr = None) -> Response:
+    errors: list[str] = []
+    amount = _amount("Coinstand", coins, errors)
+    with _db(request) as session:
+        if amount is not None:
+            wallet.set_balance(session, amount)
+            return _back_to_portfolio()
         return _render(
             request,
             "portfolio.html",

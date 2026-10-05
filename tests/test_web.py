@@ -1300,3 +1300,32 @@ def test_portfolio_shows_market_price_and_value_now(
     assert "9.000" in page.text  # market price
     # Selling at 9.000 leaves 8.550 after tax, so the position is 1.450 under water.
     assert "-1.450" in page.text
+
+
+def test_portfolio_coin_balance_follows_trades(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 12)
+    assert "Noch kein Coinstand" in client.get("/portfolio").text
+
+    response = client.post("/portfolio/coins", data={"coins": "50k"}, follow_redirects=True)
+    assert response.status_code == 200
+    assert "Coinstand: 50.000" in response.text
+
+    client.post("/portfolio/buy", data={"ea_id": "12", "price": "12.000"})
+    assert "Coinstand: 38.000" in client.get("/portfolio").text
+
+    bad = client.post("/portfolio/coins", data={"coins": "viel"})
+    assert bad.status_code == 400
+    assert "Coinstand" in bad.text
+
+
+def test_signals_and_radar_mark_cards_above_the_balance(
+    client: TestClient, collector: Collector
+) -> None:
+    seed_dip_and_uev(collector)  # dip at 8.000, ÜV chance at 100.000
+    assert "zu teuer" not in client.get("/signals").text  # no balance entered yet
+
+    client.post("/portfolio/coins", data={"coins": "20.000"})
+    page = client.get("/signals").text
+    assert page.count('title="Mehr als dein Coinstand') == 1  # only the ÜV card
+    assert "kommt kein Push" in page
+    assert client.get("/radar").status_code == 200

@@ -1058,6 +1058,30 @@ def portfolio_rm(
         typer.echo(f"Removed position #{position_id} ({name}).")
 
 
+@portfolio_app.command("coins")
+def portfolio_coins(
+    amount: Annotated[
+        int | None, typer.Argument(help="Current coin balance from the game.", min=0)
+    ] = None,
+) -> None:
+    """Show the coin balance, or enter the current one from the game."""
+    from fcast.portfolio import coins as wallet
+
+    with _db_session() as session:
+        if amount is not None:
+            wallet.set_balance(session, amount)
+        balance = wallet.balance(session)
+        if balance is None:
+            typer.echo("No coin balance yet - enter it with `fcast portfolio coins <amount>`.")
+            return
+        typer.echo(
+            f"Coin balance: {format_coins(balance.coins)} "
+            f"(entered {format_coins(balance.entered)}, spent {format_coins(balance.spent)}, "
+            f"received {format_coins(balance.received)} "
+            "after tax since then). Buy signals above it are not pushed."
+        )
+
+
 @portfolio_app.command("list")
 def portfolio_list(
     show_all: Annotated[bool, typer.Option("--all", "-a", help="Include sold positions.")] = False,
@@ -1067,6 +1091,7 @@ def portfolio_list(
     from fcast.analysis.pricing import profit as net_profit
     from fcast.db import repositories as repo
     from fcast.db.models import PositionStatus
+    from fcast.portfolio import coins as wallet
 
     open_states = [PositionStatus.HOLDING, PositionStatus.LISTED]
     with _db_session() as session:
@@ -1104,8 +1129,10 @@ def portfolio_list(
                 profit_text,
             )
         console.print(table)
+        balance = wallet.balance(session)
         typer.echo(
             f"Realised profit: {format_coins(realised)} - capital tied up: {format_coins(tied_up)}"
+            + (f" - coin balance: {format_coins(balance.coins)}" if balance else "")
         )
 
 
