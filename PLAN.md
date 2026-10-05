@@ -177,13 +177,90 @@ stehen. (Portfolio/Verkaufs-Tracking hat der Nutzer bewusst zurückgestellt, sie
 
 ---
 
+## ✅ Phase 12 – Portfolio & Verkaufs-Tracking (erledigt)
+> **Stand 03.10.2026:** `fcast portfolio buy/listed/sell/rm/list` und Seite „Portfolio“: Käufe,
+> eingestellte und verkaufte Karten, Break-even, Gewinn nach 5 % Steuer, gebundenes Kapital und
+> was ein Verkauf zum aktuellen Marktpreis brächte. Kein Import aus der Web-App.
+
+---
+
+## ✅ Phase 13 – ÜV-Einkaufsliste (erledigt)
+> **Stand 05.10.2026:** `fcast uev` und Seite „ÜV“: meistgespielte Karten bis zu einem Höchstpreis,
+> nach Bewertung gruppiert, mit höchstem sinnvollem Kaufpreis für eine Karte mit Chemie-Stil
+> (auf gültige Preisstufe gerundet) und Break-even. Welche Angebote einen Stil tragen, bleibt Handarbeit.
+
+---
+
+## Phase 14 – Selbstlernende Gewichtung
+Ziel: Signale, die sich im Backtest bewährt haben, stärker gewichten – und schwache leiser stellen.
+
+**Aufgaben**
+- Trefferquote und Ø Profit je Regel (Kauf-Dip, Promo-Vorkauf, ÜV-Chance, Trend-Start) regelmäßig
+  aus dem Backtest auf den gespeicherten Daten berechnen und mit Datum speichern
+- Daraus Vorschläge für Schwellen und Scoring-Gewichte ableiten (bestes Sweep-Ergebnis mit
+  Mindestanzahl Trades, Änderungen pro Lauf begrenzt)
+- Vorschläge **nicht automatisch übernehmen**: Anzeige im Dashboard mit „übernehmen“ /
+  „verwerfen“, übernommene Werte mit Herkunft speichern
+- Seite „Backtest“: Verlauf der Trefferquote je Regel
+
+**Abnahme**
+- Tests mit konstruierten Reihen, bei denen die bessere Gewichtung bekannt ist
+- Zu wenig Daten → kein Vorschlag (klar angezeigt), keine stillen Änderungen
+
+---
+
+## Phase 15 – SBC-Futter vor großen SBCs
+> Futter-Index je Rating 82–90 und Signal „Futter zieht an“ gibt es seit Phase 10. Offen ist der
+> Vorlauf: Futter kaufen, **bevor** eine große SBC erscheint.
+
+**Aufgaben**
+- SBC-Ankündigungen aus dem Leak- & Promo-Radar als Ereignis erkennen (z. B. Icon-/Hero-SBCs,
+  Promo-Start)
+- Verlauf des Futter-Index um vergangene SBCs auswerten (wie Promo-Verläufe in Phase 8)
+- Signal `FODDER_STOCK`: welche Ratings sich vor einem Ereignis lohnen, Kauf- und Verkaufsziel
+  nach Steuer; Push und Abschnitt auf der Seite „Radar“
+- Backtest: Futter-Kauf vor vergangenen SBCs nachspielen
+
+**Offen:** Woran erkennt FCast eine „große“ SBC zuverlässig? Vor dem Bau mit dem Nutzer klären.
+
+**Abnahme**
+- Tests mit konstruierten Futter-Verläufen; keine zusätzlichen Anfragen ohne Zähler im Test
+
+---
+
+## Phase 16 – Reddit-Sentiment
+Ziel: Hype um einzelne Karten früh sehen (Hype-Score als zusätzliches Radar-Signal).
+
+**Aufgaben**
+- **Vorher:** Quelle prüfen (offizielle Reddit-API, Nutzungsbedingungen, Rate-Limits) und das
+  Ergebnis in `docs/sources.md` festhalten; ohne Freigabe kein Einbau
+- Titel aus r/EASportsFC (o. ä.) abrufen, Spielernamen der Watchlist/Radar-Karten zuordnen
+- Hype-Score: Erwähnungen pro Tag gegenüber dem eigenen Schnitt; Signal im Radar und als
+  Faktor im Potenzial-Score
+- Backtest: Hat ein Hype-Anstieg vor Preisanstiegen gelegen?
+
+**Abnahme**
+- Zuordnung von Namen mit Fixtures getestet (Spitznamen, gleiche Nachnamen)
+- Keine Live-Requests in Tests; Rate-Limit mit Zähler geprüft
+
+---
+
+## Phase 17 – SBC-Lösungsrechner mit eigenem Club
+Ziel: günstigste Lösung für eine SBC aus eigenen Karten plus Markt.
+
+**Aufgaben**
+- Club-Import per CSV (manueller Export, **kein EA-Login**)
+- SBC-Anforderungen erfassen (Rating, Chemie, Ligen/Nationen – Umfang vorab festlegen)
+- Rechner: eigene Karten zuerst, fehlende zum Marktpreis; Kosten der Lösung nach aktuellen Preisen
+- Seite „SBC“ und `fcast sbc`
+
+**Abnahme**
+- Tests mit kleinen, von Hand gelösten SBCs
+- Ergebnis nachvollziehbar (welche Karte warum, Gesamtkosten)
+
+---
+
 ## Später / Ideen-Backlog
-- **Portfolio & Profit** (zurückgestellt 01.10.2026; Import gespeicherter Web-App-Seiten per
-  Strg+S wäre technisch möglich, Kaufpreise stehen nur in den Transferzielen): Käufe/Verkäufe erfassen, realisierter Profit nach Steuer,
-  offene Positionen, Verkaufsempfehlung, Risiko-Limit
-- **SBC-Futter-Tracker** (bisher Phase 9): günstigste Preise je Rating-Stufe 82–90, Signal `FODDER_STOCK`
-- Sentiment-Signal (Reddit-Titel nach Spielernamen, Hype-Score)
-- SBC-Lösungsrechner mit eigenem Club (Import per CSV, kein EA-Login)
-- Selbstlernende Gewichtung: Signale anhand ihrer Trefferquote aus dem Backtesting nachjustieren
-- Backup der SQLite-DB (Cronjob oder in bestehendes Backup-Konzept einhängen)
 - Zugriff von unterwegs über VPN (WireGuard in der Fritzbox)
+- Dashboard-Login: auf dem Server ist `FCAST_WEB_PASSWORD` leer (offen im LAN) – vor VPN-Zugriff
+  wieder setzen
