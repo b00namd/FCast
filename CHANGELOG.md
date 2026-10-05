@@ -16,6 +16,9 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   der Break-even wird aus dem gerundeten Wert berechnet.
 
 ### Geändert
+- **Suche im Portfolio (05.10.):** Suchfeld über der Positionstabelle filtert nach Name, Rating,
+  Kartentyp, EA-ID oder Positionsnummer („#12“); alle Wörter müssen passen. Wirkt zusammen mit
+  „Verkaufte mit anzeigen“ und zeigt „x von y Positionen“.
 - **Marktpreis je offener Position** im Portfolio: neue Spalten „Markt“ und „Jetzt“ – was ein
   sofortiger Verkauf zum aktuellen Marktpreis nach Steuer brächte – sowie die Summe darüber.
   Damit ist auf einen Blick zu sehen, ob eine offene Position im Plus steht und ob der eigene

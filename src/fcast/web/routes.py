@@ -1072,18 +1072,40 @@ def uev_page(
 # --- portfolio ---------------------------------------------------------------------------
 
 
+def _matches_search(row: portfolio_summary.PositionRow, words: list[str]) -> bool:
+    """Every search word must appear in the card's name, rating, type, EA-ID or position id."""
+    player = row.position.player
+    haystack = " ".join(
+        str(part)
+        for part in (
+            player.name,
+            player.rating,
+            player.card_type,
+            player.ea_id,
+            f"#{row.position.id}",
+        )
+        if part is not None
+    ).casefold()
+    return all(word in haystack for word in words)
+
+
 def _portfolio_context(
     session: Session,
     settings: Settings,
     show_all: bool,
     errors: list[str] | None = None,
+    search: str = "",
 ) -> dict[str, Any]:
     summary = portfolio_summary.summarize(
         session, settings, None if show_all else portfolio_summary.OPEN_POSITIONS
     )
+    rows = list(reversed(summary.rows))  # newest purchase first
+    words = search.casefold().split()
     return {
         "nav": "portfolio",
-        "rows": list(reversed(summary.rows)),  # newest purchase first
+        "rows": [row for row in rows if _matches_search(row, words)],
+        "total_rows": len(rows),
+        "search": search.strip(),
         "realised": summary.realised,
         "tied_up": summary.tied_up,
         "unrealised": summary.unrealised,
@@ -1099,10 +1121,13 @@ def _portfolio_context(
 def portfolio_page(
     request: Request,
     show_all: Annotated[bool, Query()] = False,
+    q: Annotated[str, Query(max_length=100)] = "",
 ) -> HTMLResponse:
     settings = _settings(request)
     with _db(request) as session:
-        return _render(request, "portfolio.html", _portfolio_context(session, settings, show_all))
+        return _render(
+            request, "portfolio.html", _portfolio_context(session, settings, show_all, search=q)
+        )
 
 
 def _back_to_portfolio() -> RedirectResponse:

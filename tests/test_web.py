@@ -1360,6 +1360,36 @@ def test_portfolio_buy_by_card_name(client: TestClient, collector: Collector) ->
     assert "Keine bekannte Karte" in unknown.text
 
 
+def test_portfolio_search_filters_positions(client: TestClient, collector: Collector) -> None:
+    with collector.session_factory.begin() as session:
+        for ea_id, name, rating, card_type in (
+            (31, "Jamal Musiala", 87, "Gold Rare"),
+            (32, "Michael Olise", 91, "Team of the Week"),
+        ):
+            player = repo.upsert_player(
+                session,
+                ea_id,
+                repo.PlayerDetails(name=name, rating=rating, card_type=card_type),
+            )
+            repo.open_position(session, player, 10_000)
+        sold = repo.open_position(session, player, 20_000)  # a sold Olise
+        repo.sell_position(session, sold, 25_000)
+
+    found = client.get("/portfolio", params={"q": "musiala 87"})
+    assert found.status_code == 200
+    assert "Jamal Musiala" in found.text
+    assert "Michael Olise" not in found.text
+    assert "1 von 2 Positionen" in found.text
+
+    by_type = client.get("/portfolio", params={"q": "week", "show_all": "true"})
+    assert "Michael Olise" in by_type.text
+    assert "Jamal Musiala" not in by_type.text
+    assert "2 von 3 Positionen" in by_type.text
+
+    nothing = client.get("/portfolio", params={"q": "Niemand"})
+    assert "Keine Position passt zu „Niemand“" in nothing.text
+
+
 def test_portfolio_page_shows_listings_and_unknown_buy(
     client: TestClient, collector: Collector
 ) -> None:

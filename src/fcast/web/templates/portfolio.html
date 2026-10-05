@@ -92,16 +92,32 @@
   <small class="muted">Preise gehen auch als „4.500“ oder „45k“.</small>
 </form>
 
+<form method="get" action="/portfolio">
+  <fieldset role="group">
+    <input type="search" name="q" value="{{ search }}" placeholder="Positionen durchsuchen, Name, Rating, Kartentyp, EA-ID oder „#12“" aria-label="Positionen durchsuchen">
+    {% if show_all %}<input type="hidden" name="show_all" value="true">{% endif %}
+    <button type="submit" class="secondary">Suchen</button>
+  </fieldset>
+</form>
+
 <p>
   {% if show_all %}
-    <a href="/portfolio" role="button" class="secondary">Nur offene Positionen</a>
+    <a href="/portfolio{% if search %}?q={{ search | urlencode }}{% endif %}" role="button" class="secondary">Nur offene Positionen</a>
   {% else %}
-    <a href="/portfolio?show_all=true" role="button" class="secondary">Verkaufte mit anzeigen</a>
+    <a href="/portfolio?show_all=true{% if search %}&amp;q={{ search | urlencode }}{% endif %}" role="button" class="secondary">Verkaufte mit anzeigen</a>
+  {% endif %}
+  {% if search %}
+    <a href="/portfolio{% if show_all %}?show_all=true{% endif %}" role="button" class="secondary outline">Suche zurücksetzen</a>
+    <small class="muted">{{ rows | length }} von {{ total_rows }} Positionen passen zu „{{ search }}“.</small>
   {% endif %}
 </p>
 
 {% if not rows %}
+  {% if search %}
+  <p class="muted">Keine Position passt zu „{{ search }}“{% if not show_all %} – evtl. ist sie schon verkauft, dann „Verkaufte mit anzeigen“{% endif %}.</p>
+  {% else %}
   <p class="muted">Noch keine Positionen – oben die erste eintragen.</p>
+  {% endif %}
 {% else %}
 <div class="overflow-auto">
 <table>
