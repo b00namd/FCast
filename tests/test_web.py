@@ -1244,6 +1244,25 @@ def test_portfolio_buy_form_records_a_position(client: TestClient, collector: Co
     assert [p.buy_price for p in positions] == [4_500]
 
 
+def test_portfolio_buy_form_accepts_a_free_card(client: TestClient, collector: Collector) -> None:
+    add_watch(collector, 7)
+
+    response = client.post(
+        "/portfolio/buy", data={"ea_id": "7", "price": "0"}, follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    with collector.session_factory() as session:
+        positions = repo.list_positions(session)
+    assert [p.buy_price for p in positions] == [0]
+
+
+def test_parse_coins_allows_zero_on_request() -> None:
+    assert parse_coins("0", allow_zero=True) == 0
+    with pytest.raises(ValueError, match="amount"):
+        parse_coins("-5", allow_zero=True)
+
+
 def test_portfolio_buy_rejects_unknown_card(client: TestClient) -> None:
     response = client.post("/portfolio/buy", data={"ea_id": "999", "price": "1000"})
 

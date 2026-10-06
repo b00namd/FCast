@@ -1100,7 +1100,9 @@ AGAIN_HELP = "Book even if it looks like a duplicate."
 @portfolio_app.command("buy")
 def portfolio_buy(
     card: Annotated[str, typer.Argument(help=CARD_HELP)],
-    price: Annotated[int, typer.Argument(help="Price paid, in coins.", min=1)],
+    price: Annotated[
+        int, typer.Argument(help="Price paid, in coins (0 for a pack/reward card).", min=0)
+    ],
     again: Annotated[bool, typer.Option("--again", help=AGAIN_HELP)] = False,
 ) -> None:
     """Record a purchase."""

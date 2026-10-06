@@ -8,10 +8,11 @@ _MULTIPLIERS = {"k": 1_000, "m": 1_000_000}
 NBSP = chr(0xA0)
 
 
-def parse_coins(text: str | None) -> int | None:
+def parse_coins(text: str | None, *, allow_zero: bool = False) -> int | None:
     """Coins as typed by a user: "1.200.000", "1,200,000", "1 200 000", "1.2M", "45k", "950".
 
-    Empty input returns None. Raises ValueError for anything else or non-positive values.
+    Empty input returns None. Raises ValueError for anything else or non-positive values
+    (0 is accepted with `allow_zero`, e.g. for a card from a pack).
     """
     if text is None or not text.strip():
         return None
@@ -27,7 +28,7 @@ def parse_coins(text: str | None) -> int | None:
         if not digits.isdigit():
             raise ValueError(f"invalid amount: {text!r}")
         value = int(digits)
-    if value <= 0:
+    if value < 0 or (value == 0 and not allow_zero):
         raise ValueError("amount must be positive")
     return value
 

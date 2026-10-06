@@ -94,3 +94,45 @@ def test_portfolio_listings_migration_keeps_current_listings(tmp_path: Path) -> 
             assert connection.execute(text("SELECT COUNT(*) FROM portfolio")).scalar() == 2
     finally:
         engine.dispose()
+
+
+def test_free_card_migration_keeps_listings(tmp_path: Path) -> None:
+    from sqlalchemy import text
+
+    url = f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}"
+    migrate.upgrade(url, "8d4e1b7a2c90")
+    engine = create_db_engine(url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("INSERT INTO players (id, ea_id, updated_at) VALUES (1, 7, '2026-10-01')")
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO portfolio (id, player_id, buy_price, bought_at, sell_price, "
+                    "status) VALUES (1, 1, 1000, '2026-10-01', 1500, 'listed')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO portfolio_listings (position_id, price, listed_at) "
+                    "VALUES (1, 1500, '2026-10-01')"
+                )
+            )
+        migrate.upgrade(url)
+        with engine.begin() as connection:
+            # Rebuilding the portfolio table must not cascade into its listings.
+            assert connection.execute(text("SELECT COUNT(*) FROM portfolio_listings")).scalar() == 1
+            connection.execute(
+                text(
+                    "INSERT INTO portfolio (player_id, buy_price, bought_at, status) "
+                    "VALUES (1, 0, '2026-10-02', 'holding')"
+                )
+            )
+        migrate.downgrade(url, "8d4e1b7a2c90")
+        with engine.connect() as connection:
+            buy_prices = connection.execute(text("SELECT buy_price FROM portfolio ORDER BY id"))
+            assert [row[0] for row in buy_prices] == [1000, None]
+            assert connection.execute(text("SELECT COUNT(*) FROM portfolio_listings")).scalar() == 1
+    finally:
+        engine.dispose()

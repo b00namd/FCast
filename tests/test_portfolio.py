@@ -21,9 +21,18 @@ def test_open_position_starts_as_holding(session: Session, player: Player) -> No
     assert position.sold_at is None
 
 
-def test_open_position_rejects_non_positive_price(session: Session, player: Player) -> None:
+def test_open_position_rejects_negative_price(session: Session, player: Player) -> None:
     with pytest.raises(ValueError):
-        repo.open_position(session, player, 0)
+        repo.open_position(session, player, -1)
+
+
+def test_free_card_from_a_pack_counts_fully_as_profit(session: Session, player: Player) -> None:
+    position = repo.open_position(session, player, 0)
+    repo.sell_position(session, position, 10_000)
+    session.flush()
+
+    assert position.buy_price == 0
+    assert profit(0, 10_000) == 9_500
 
 
 def test_mark_listed_keeps_position_open(session: Session, player: Player) -> None:

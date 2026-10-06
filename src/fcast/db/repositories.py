@@ -395,9 +395,9 @@ def remove_watch(session: Session, player: Player) -> None:
 def open_position(
     session: Session, player: Player, buy_price: int | None, bought_at: datetime | None = None
 ) -> PortfolioPosition:
-    """Record a purchase; `buy_price` None if it is unknown (pack, reward, before FCast)."""
-    if buy_price is not None:
-        _require_positive("buy_price", buy_price)
+    """Record a purchase; `buy_price` 0 for a free card (pack, reward), None if unknown."""
+    if buy_price is not None and buy_price < 0:
+        raise ValueError(f"buy_price must not be negative, got {buy_price}")
     position = PortfolioPosition(
         player=player, buy_price=buy_price, bought_at=bought_at or utcnow()
     )

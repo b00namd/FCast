@@ -125,7 +125,11 @@ def profit_report(session: Session, tz: tzinfo, now: datetime) -> ProfitReport:
     for position in repo.list_positions(session, [PositionStatus.SOLD]):
         if position.sold_at is None or position.sell_price is None:
             continue
-        gain = profit(position.buy_price, position.sell_price) if position.buy_price else None
+        gain = (
+            profit(position.buy_price, position.sell_price)
+            if position.buy_price is not None
+            else None
+        )
         day = position.sold_at.astimezone(tz).date()
         week = day - timedelta(days=day.weekday())
         _add(days.setdefault(day, PeriodProfit(day)), gain)

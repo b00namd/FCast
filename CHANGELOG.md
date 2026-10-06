@@ -16,6 +16,14 @@ Alle nennenswerten Änderungen an FCast. Format angelehnt an [Keep a Changelog](
   der Break-even wird aus dem gerundeten Wert berechnet.
 
 ### Geändert
+- **Karten für 0 Coins im Portfolio (06.10.):** Karten aus Packs oder Belohnungen lassen sich
+  mit Kaufpreis 0 eintragen – im Dashboard, per `fcast portfolio buy <Karte> 0` und im
+  Screenshot-JSON. Anders als „unbekannt“ (Kauf nicht erfasst) zählt der Verkauf dann voll als
+  Gewinn (Verkaufspreis nach Steuer). Verkaufs- und Einstellpreise müssen weiter > 0 sein.
+  Migration `5a3c9e7f1d24` lockert den Check-Constraint auf `buy_price >= 0`.
+- **Migrationen auf SQLite** laufen jetzt mit `PRAGMA foreign_keys=OFF`: Beim Neuaufbau einer
+  Tabelle (Batch-Migration) hätte das Löschen der alten Tabelle sonst per `ON DELETE CASCADE`
+  abhängige Zeilen (z. B. die Einstell-Historie in `portfolio_listings`) mitgelöscht.
 - **Suche im Portfolio (05.10.):** Suchfeld über der Positionstabelle filtert nach Name, Rating,
   Kartentyp, EA-ID oder Positionsnummer („#12“); alle Wörter müssen passen. Wirkt zusammen mit
   „Verkaufte mit anzeigen“ und zeigt „x von y Positionen“.

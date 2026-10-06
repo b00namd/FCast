@@ -9,8 +9,9 @@ look already booked are skipped unless `again` is set:
 - sold: a copy of the card was sold at that price within the last days and not booked in this
   run yet
 
-A sale or listing without an open position creates one with unknown buy price (pack, reward,
-bought before FCast): it counts for the coin balance but not for the profit.
+A purchase at 0 coins is a free card (pack, reward) and counts fully for the profit. A sale or
+listing without an open position creates one with unknown buy price (e.g. bought before
+FCast): it counts for the coin balance but not for the profit.
 """
 
 from collections import defaultdict
@@ -264,8 +265,8 @@ async def book(
     run = _Run(session, now, source)
     for entry in entries:
         try:
-            if entry.price <= 0:
-                raise ValueError("price must be positive")
+            if entry.price < 0 or (entry.price == 0 and entry.action is not Action.BUY):
+                raise ValueError("price must be positive (0 only for a free card bought)")
             booking.results.append(await run.book(entry))
         except (lookup.CardLookupError, repo.NotFoundError, repo.InvalidStateError) as exc:
             booking.results.append(Result(entry, Outcome.ERROR, str(exc)))
@@ -288,7 +289,7 @@ def _price(value: object) -> int:
     if isinstance(value, int):
         return value
     if isinstance(value, str):
-        price = parse_coins(value)
+        price = parse_coins(value, allow_zero=True)  # 0 for free cards, checked in `book`
         if price is not None:
             return price
     raise ValueError(f"invalid price: {value!r}")

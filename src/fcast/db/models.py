@@ -116,13 +116,13 @@ class WatchlistEntry(Base):
 class PortfolioPosition(Base):
     __tablename__ = "portfolio"
     __table_args__ = (
-        CheckConstraint("buy_price IS NULL OR buy_price > 0", name="buy_price_positive"),
+        CheckConstraint("buy_price IS NULL OR buy_price >= 0", name="buy_price_not_negative"),
         CheckConstraint("sell_price IS NULL OR sell_price > 0", name="sell_price_positive"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="RESTRICT"))
-    # None: the purchase was never recorded (pack, reward, bought before FCast).
+    # 0: free card (pack, reward); None: the purchase was never recorded (e.g. before FCast).
     buy_price: Mapped[int | None]
     bought_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     # Listing price while `listed`, final price once `sold`.

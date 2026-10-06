@@ -1134,9 +1134,11 @@ def _back_to_portfolio() -> RedirectResponse:
     return RedirectResponse("/portfolio", status_code=303)
 
 
-def _amount(label: str, text: str | None, errors: list[str]) -> int | None:
+def _amount(
+    label: str, text: str | None, errors: list[str], *, allow_zero: bool = False
+) -> int | None:
     try:
-        value = forms.parse_coins(text)
+        value = forms.parse_coins(text, allow_zero=allow_zero)
     except ValueError as exc:
         errors.append(f"{label}: {exc}")
         return None
@@ -1161,7 +1163,7 @@ def portfolio_buy(
             query = card_lookup.parse_query(ea_id)  # "Musiala 87", "Olise 91 TOTW"
         else:
             errors.append(str(exc))
-    amount = _amount("Kaufpreis", price, errors)
+    amount = _amount("Kaufpreis", price, errors, allow_zero=True)  # 0: card from a pack
     with _db(request) as session:
         player: Player | None = None
         if query is not None:

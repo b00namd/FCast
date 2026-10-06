@@ -128,6 +128,23 @@ async def test_buy_list_and_sell_by_name(session: Session, cards: dict[str, Play
     assert position.status is PositionStatus.SOLD
 
 
+async def test_free_card_can_be_bought_at_zero_but_not_sold_at_zero(
+    session: Session, cards: dict[str, Player]
+) -> None:
+    booking = await book(
+        session,
+        [
+            Entry(Action.BUY, 0, card="Musiala 87"),
+            Entry(Action.SOLD, 0, card="Musiala 87"),
+        ],
+        NOW,
+    )
+    assert [r.outcome for r in booking.results] == [Outcome.DONE, Outcome.ERROR]
+    position = repo.get_position(session, booking.results[0].position_id or 0)
+    assert position.buy_price == 0
+    assert booking.results[0].coins == 0
+
+
 async def test_screenshot_duplicates_are_skipped(
     session: Session, cards: dict[str, Player]
 ) -> None:
@@ -310,13 +327,14 @@ def test_profit_per_day_week_and_total(session: Session, cards: dict[str, Player
     sale(5_000, 6_000, datetime(2026, 10, 4, 23, 30, tzinfo=UTC))  # 5.700 - 5.000 = 700
     # Sunday 21:00 UTC = 23:00 in Berlin: last week.
     sale(20_000, 20_000, datetime(2026, 10, 4, 21, 0, tzinfo=UTC))  # 19.000 - 20.000 = -1.000
-    sale(None, 30_000, now - timedelta(hours=1))  # pack card: not in the profit
+    sale(None, 30_000, now - timedelta(hours=1))  # purchase not recorded: not in the profit
+    sale(0, 1_000, now - timedelta(minutes=30))  # pack card: 950 profit
 
     report = portfolio_summary.profit_report(session, berlin, now)
-    assert (report.today.profit, report.today.sales, report.today.unknown) == (2_100, 2, 1)
-    assert report.week.profit == 2_100
+    assert (report.today.profit, report.today.sales, report.today.unknown) == (3_050, 3, 1)
+    assert report.week.profit == 3_050
     assert report.week.start.isoformat() == "2026-10-05"
-    assert (report.total.profit, report.total.sales, report.total.unknown) == (1_100, 3, 1)
+    assert (report.total.profit, report.total.sales, report.total.unknown) == (2_050, 4, 1)
     assert [d.start.isoformat() for d in report.days] == ["2026-10-05", "2026-10-04"]
     assert [w.start.isoformat() for w in report.weeks] == ["2026-10-05", "2026-09-28"]
     assert report.weeks[1].profit == -1_000
