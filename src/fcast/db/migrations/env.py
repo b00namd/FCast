@@ -40,6 +40,11 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     engine = create_db_engine(_database_url())
     with engine.connect() as connection:
+        if connection.dialect.name == "sqlite":
+            # Batch operations recreate tables; with foreign keys on, dropping the old table
+            # would cascade-delete rows of child tables (e.g. portfolio_listings).
+            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            connection.commit()
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
